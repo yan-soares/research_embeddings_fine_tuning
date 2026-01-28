@@ -34,7 +34,7 @@ class AttentionPooling(nn.Module):
         # 2. Compara com contexto (u * energy)
         weights = self.context_vector(weights).squeeze(-1)
         # 3. Mascara padding (-inf)
-        weights = weights.masked_fill(mask == 0, -1e4)
+        weights = weights.masked_fill(mask == 0, -1e9)
         # 4. Softmax (Probabilidades)
         weights = F.softmax(weights, dim=1)
         # 5. Soma Ponderada
@@ -158,59 +158,32 @@ class SentenceEncoder:
             case "MAX-NS":
                 return self._max_pooling_exclude_cls_sep_and_stopwords(hidden_state, attention_mask, input_ids)
             
-            # --- OPÇÃO 1: ATTENTION-ENSEMBLE (A novidade) ---
-            # Média de Especialistas: Tenta melhorar TREC/MRPC misturando conhecimentos
-            case "ATTENTION-ENSEMBLE":
-                source_weights = None
-                if self.all_attention_weights:
-                    # Define os especialistas
-                    tasks_to_mix = ['SST2', 'TREC', 'MRPC']
-                    
-                    # Pega o que tem disponível no arquivo .pt
-                    available_dicts = [self.all_attention_weights[t] for t in tasks_to_mix if t in self.all_attention_weights]
-                    
-                    if available_dicts:
-                        # Clona o primeiro para começar a média
-                        avg_weights = {k: v.clone() for k, v in available_dicts[0].items()}
-                        
-                        # Soma os outros
-                        for i in range(1, len(available_dicts)):
-                            for key in avg_weights:
-                                avg_weights[key] += available_dicts[i][key]
-                        
-                        # Divide pelo total
-                        for key in avg_weights:
-                            avg_weights[key] = avg_weights[key] / len(available_dicts)
-                            
-                        source_weights = avg_weights
-                
-                # Aplica
-                if source_weights is not None:
-                    self.att_pool.load_state_dict(source_weights)
-                return self.att_pool(hidden_state, attention_mask)
-
-            # --- OPÇÃO 2: ATTENTION (O Padrão/Transfer) ---
-            # Source Swapping: SST2 ensina todo mundo
+            # --- ATENÇÃO (LÓGICA CORRIGIDA PARA UNIVERSAL) ---
             case "ATTENTION":
                 source_weights = None
                 if self.all_attention_weights:
-                    # Lógica de Honestidade (SST2 <-> MR)
-                    if self.current_task_name == 'SST2':
-                        if 'MR' in self.all_attention_weights:
-                            source_weights = self.all_attention_weights['MR']
-                        else:
-                            # Fallback se não tiver MR
-                            av = [k for k in self.all_attention_weights.keys() if k != 'SST2']
-                            if av: source_weights = self.all_attention_weights[av[0]]
-                    else:
-                        # Para todas as outras, usa SST2
-                        if 'SST2' in self.all_attention_weights:
-                            source_weights = self.all_attention_weights['SST2']
-                        elif 'MR' in self.all_attention_weights:
-                            source_weights = self.all_attention_weights['MR']
+                    # 1. Tenta carregar a chave da própria task
+                    # (Como nosso arquivo universal tem chaves para 'MR', 'CR', etc., isso vai funcionar sempre)
+                    if self.current_task_name in self.all_attention_weights:
+                        source_weights = self.all_attention_weights[self.current_task_name]
+                    
+                    # 2. Fallback: Se não achar a task, busca chaves genéricas universais
+                    elif 'UNIVERSAL' in self.all_attention_weights:
+                        source_weights = self.all_attention_weights['UNIVERSAL']
+                    elif 'AVG_SENTEVAL' in self.all_attention_weights:
+                        source_weights = self.all_attention_weights['AVG_SENTEVAL']
+                    elif 'NLI' in self.all_attention_weights:
+                        source_weights = self.all_attention_weights['NLI']
+                    
+                    # 3. Fallback final (Legado)
+                    elif 'MR' in self.all_attention_weights:
+                        source_weights = self.all_attention_weights['MR']
 
                 if source_weights is not None:
                     self.att_pool.load_state_dict(source_weights)
+                
+                # Se não achou pesos, ele usa a inicialização aleatória (CUIDADO!)
+                # Idealmente, o treino garante que sempre ache.
                 return self.att_pool(hidden_state, attention_mask)
                      
     def _get_pooling_result(self, hidden_state, attention_mask, name_pooling, name_agg, input_ids):
