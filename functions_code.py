@@ -181,7 +181,7 @@ def strategies_pooling_list (args, qtd_layers):
         agg_layers_args = args.agg_layers
         
         #POOLING
-        pooling_techniques = get_pooling_techniques(poolings_args, agg_layers_args)
+        pooling_techniques = get_pooling_techniques(poolings_args)
         
         #LAYERS
         if initial_layer_args is not None:

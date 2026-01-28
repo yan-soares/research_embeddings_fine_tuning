@@ -9,9 +9,9 @@ import os
 import json
 import time
 import warnings
-from transformers import AutoTokenizer, AutoModel, DebertaV2Model, DebertaV2Tokenizer, BertTokenizer, BertModel, RobertaTokenizer, RobertaModel
 from sklearn.exceptions import ConvergenceWarning
 from nltk.corpus import stopwords
+import numpy as np
 
 import functions_code
 
@@ -60,6 +60,10 @@ class SentenceEncoder:
         self.actual_layer = None
         self.current_task_name = None
 
+        # --- Inicializa o modelo escolhido ---
+        self.name_model, self.qtd_layers, self.tokenizer, self.model = functions_code.load_model(model_name, device)
+        self._prepare_special_token_ids()
+
         # --- FUSÃO (CAP 3) ---
         self.dynamic_weights = {}
         self.dynamic_weights_path = dynamic_weights_path
@@ -80,11 +84,6 @@ class SentenceEncoder:
         else:
             if attention_weights_path:
                 print(f"AVISO: Arquivo de atenção {attention_weights_path} não encontrado.")
-
-        # --- Inicializa o modelo escolhido ---
-        self.name_model, self.qtd_layers, self.tokenizer, self.model = functions_code.load_model(model_name, device)
-        self._prepare_special_token_ids()
-
        
     def _prepare_special_token_ids(self):
         stopwords_list = stopwords.words('english')
@@ -240,25 +239,86 @@ class SentenceEncoder:
                     self._simple_pooling(hidden_state, attention_mask, name_pooling_split[3], input_ids)
                 ), dim=1)
 
+    # --- NOVO MÉTODO AUXILIAR (Adicione dentro da classe SentenceEncoder) ---
+    def _compute_mean_weights(self, task_list):
+        """Calcula a média dos pesos para uma lista de tarefas, ignorando as que não existem no JSON."""
+        valid_vectors = []
+        for task in task_list:
+            # Garante que temos pesos para essa task
+            if task in self.dynamic_weights:
+                valid_vectors.append(np.array(self.dynamic_weights[task]))
+        
+        if not valid_vectors:
+            return None
+            
+        # Calcula a média coluna por coluna (layer por layer)
+        mean_vector = np.mean(valid_vectors, axis=0)
+        return mean_vector.tolist()
+
+    # --- MÉTODO _apply_pooling ATUALIZADO ---
     def _apply_pooling(self, output, attention_mask, input_ids):  
         hidden_states = output.hidden_states
-        name_pooling = self.pooling_strategy.split("_")[0] # Ex: AVG ou ATTENTION
-        name_agg = self.pooling_strategy.split("_")[-1]    # Ex: DYNAMIC
+        name_pooling = self.pooling_strategy.split("_")[0] 
+        name_agg = self.pooling_strategy.split("_")[-1]    
 
-        if name_agg in ['DYNAMIC', 'UNIVERSAL']:
-            if name_agg == 'UNIVERSAL': task_key = 'AVG_ALL'
-            else: task_key = self.current_task_name
-            
+        # Listas de definição para os cálculos de conjuntos
+        senteval_tasks = ['MR', 'CR', 'SUBJ', 'MPQA', 'SST2', 'TREC', 'MRPC']
+        all_tasks_with_nli = senteval_tasks + ['NLI']
+
+        # Lista das novas estratégias aceitas
+        dynamic_strategies = [
+            'IN-TASK', 'LEAVE-ONE-OUT-SENTEVAL', 'AVG-SENTEVAL', 
+            'NLI', 'LEAVE-ONE-OUT-SENTEVAL-NLI', 'AVG-ALL'
+        ]
+
+        if name_agg in dynamic_strategies:
             weights = None
-            if task_key in self.dynamic_weights:
-                weights = self.dynamic_weights[task_key]
             
+            # 1. IN-TASK (Usa os pesos da própria tarefa atual) [Igual ao antigo DYNAMIC]
+            if name_agg == 'IN-TASK':
+                if self.current_task_name in self.dynamic_weights:
+                    weights = self.dynamic_weights[self.current_task_name]
+
+            # 2. LEAVE-ONE-OUT-SENTEVAL (Média do SentEval - Task Atual)
+            elif name_agg == 'LEAVE-ONE-OUT-SENTEVAL':
+                target_tasks = [t for t in senteval_tasks if t != self.current_task_name]
+                weights = self._compute_mean_weights(target_tasks)
+
+            # 3. AVG-SENTEVAL (Média de todas do SentEval)
+            elif name_agg == 'AVG-SENTEVAL':
+                # Tenta pegar direto do JSON se existir, senão calcula
+                if 'AVG_SENTEVAL' in self.dynamic_weights:
+                    weights = self.dynamic_weights['AVG_SENTEVAL']
+                else:
+                    weights = self._compute_mean_weights(senteval_tasks)
+
+            # 4. NLI (Usa pesos do NLI puro)
+            elif name_agg == 'NLI':
+                if 'NLI' in self.dynamic_weights:
+                    weights = self.dynamic_weights['NLI']
+
+            # 5. LEAVE-ONE-OUT-SENTEVAL-NLI (Média de SentEval + NLI - Task Atual)
+            elif name_agg == 'LEAVE-ONE-OUT-SENTEVAL-NLI':
+                target_tasks = [t for t in all_tasks_with_nli if t != self.current_task_name]
+                weights = self._compute_mean_weights(target_tasks)
+
+            # 6. AVG-ALL (Média de tudo + NLI) [Igual ao antigo UNIVERSAL]
+            elif name_agg == 'AVG-ALL':
+                if 'AVG_ALL' in self.dynamic_weights:
+                    weights = self.dynamic_weights['AVG_ALL']
+                else:
+                    weights = self._compute_mean_weights(all_tasks_with_nli)
+
+            # --- FALLBACK DE SEGURANÇA ---
+            # Se não achou pesos (ex: task nova sem pesos no JSON), usa média uniforme
             if weights is None:
+                # Tenta fallback para AVG_ALL se não for uma estratégia Leave-Out específica
                 if 'AVG_ALL' in self.dynamic_weights:
                     weights = self.dynamic_weights['AVG_ALL']
                 else:
                     weights = [1.0/len(hidden_states[-12:])] * len(hidden_states[-12:])
 
+            # Aplicação dos Pesos
             layers_to_fuse = torch.stack(hidden_states[-12:], dim=0) 
             weights_tensor = torch.tensor(weights, device=self.device, dtype=layers_to_fuse.dtype)
             weights_tensor = weights_tensor.view(-1, 1, 1, 1) 
@@ -266,7 +326,7 @@ class SentenceEncoder:
             
             return self._get_pooling_result(fused_layer, attention_mask, name_pooling, name_agg, input_ids)
 
-        # ... (Resto do apply_pooling mantido) ...
+        # ... (Resto do código para LYR, SUM-1-12, AVG-1-12 continua igual) ...
         if name_agg.startswith("LYR"):
             layer_idx = int(name_agg.split('-')[-1])   
             LYR_hidden =  hidden_states[layer_idx]            
@@ -324,7 +384,7 @@ def run_senteval(model_name, tasks, args, type_task):
         results_general[pooling]['best_layers'] = encoder.print_best_layers
 
         print("\nProgress: " + str(len(tempos)) + '/' + str(len(pooling_strategies)))
-        print(f"--> Time for this run: {elapsed_time:.2f} minutes")      
+        print(f"--> Time for this run: {elapsed_time:.2f} minutes")     
         print(f"--> Tempo Faltante Estimado: {tempo_faltante:.2f} horas")  
         print(f"--> Dias Faltante Estimado: {dias_faltante:.2f} dias")
                               
