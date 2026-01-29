@@ -60,6 +60,9 @@ class SentenceEncoder:
         self.actual_layer = None
         self.current_task_name = None
 
+        self.run_pooling = None
+        self.run_layer = None
+
         # --- Inicializa o modelo escolhido ---
         self.name_model, self.qtd_layers, self.tokenizer, self.model = functions_code.load_model(model_name, device)
         self._prepare_special_token_ids()
@@ -128,7 +131,7 @@ class SentenceEncoder:
         masked_embeddings = output * expanded_mask
         sum_embeddings = masked_embeddings.sum(dim=1)
         valid_token_counts = expanded_mask.sum(dim=1)
-        return sum_embeddings / valid_token_counts.clamp(min=1e-9)
+        return sum_embeddings / valid_token_counts.clamp(min=1e-4)
 
     def _sum_pooling_exclude_cls_sep_and_stopwords(self, output, attention_mask, input_ids):
         mask = self._create_combined_mask(input_ids, attention_mask, exclude_stopwords=True, exclude_cls_sep=True)
@@ -138,49 +141,60 @@ class SentenceEncoder:
     def _max_pooling_exclude_cls_sep_and_stopwords(self, output, attention_mask, input_ids):
         mask = self._create_combined_mask(input_ids, attention_mask, exclude_stopwords=True, exclude_cls_sep=True)
         expanded_mask = mask.unsqueeze(-1)
-        masked_embeddings = output.masked_fill(expanded_mask == 0, -1e9)
+        masked_embeddings = output.masked_fill(expanded_mask == 0, -1e4)
         return masked_embeddings.max(dim=1)[0]
     
     def _simple_pooling(self, hidden_state, attention_mask, name_pooling, input_ids):
         match name_pooling:
             case "CLS":
+                self.run_pooling = "CLS"
                 return hidden_state[:, 0, :]
             case "AVG":
-                return ((hidden_state * attention_mask.unsqueeze(-1)).sum(1) / attention_mask.sum(-1).unsqueeze(-1).clamp(min=1e-9))
+                self.run_pooling = "AVG"
+                return ((hidden_state * attention_mask.unsqueeze(-1)).sum(1) / attention_mask.sum(-1).unsqueeze(-1).clamp(min=1e-4))
             case "SUM":
+                self.run_pooling = "SUM"
                 return (hidden_state * attention_mask.unsqueeze(-1)).sum(dim=1)
             case "MAX":
-                return torch.max(hidden_state.masked_fill(attention_mask.unsqueeze(-1) == 0, -1e9), dim=1)[0]
+                self.run_pooling = "MAX"
+                return torch.max(hidden_state.masked_fill(attention_mask.unsqueeze(-1) == 0, -1e4), dim=1)[0]
             case "AVG-NS":
+                self.run_pooling = "AVG-NS"
                 return self._mean_pooling_exclude_cls_sep_and_stopwords(hidden_state, attention_mask, input_ids)
             case "SUM-NS":
+                self.run_pooling = "SUM-NS"
                 return self._sum_pooling_exclude_cls_sep_and_stopwords(hidden_state, attention_mask, input_ids)
             case "MAX-NS":
+                self.run_pooling = "MAX-NS"
                 return self._max_pooling_exclude_cls_sep_and_stopwords(hidden_state, attention_mask, input_ids)
             
             # --- ATENÇÃO (LÓGICA CORRIGIDA PARA UNIVERSAL) ---
             case "ATTENTION":
                 source_weights = None
+                self.run_pooling = "ATTENTION-NOT-FOUND"
                 if self.all_attention_weights:
                     # 1. Tenta carregar a chave da própria task
                     # (Como nosso arquivo universal tem chaves para 'MR', 'CR', etc., isso vai funcionar sempre)
                     if self.current_task_name in self.all_attention_weights:
                         source_weights = self.all_attention_weights[self.current_task_name]
+                        self.run_pooling = "ATTENTION" + "-" + str(self.current_task_name)
                     
                     # 2. Fallback: Se não achar a task, busca chaves genéricas universais
                     elif 'UNIVERSAL' in self.all_attention_weights:
                         source_weights = self.all_attention_weights['UNIVERSAL']
+                        self.run_pooling = "ATTENTION-UNIVERSAL"
                     elif 'AVG_SENTEVAL' in self.all_attention_weights:
                         source_weights = self.all_attention_weights['AVG_SENTEVAL']
+                        self.run_pooling = "ATTENTION-AVG-SENTEVAL"
                     elif 'NLI' in self.all_attention_weights:
                         source_weights = self.all_attention_weights['NLI']
+                        self.run_pooling = "ATTENTION-NLI"
                     
-                    # 3. Fallback final (Legado)
-                    elif 'MR' in self.all_attention_weights:
-                        source_weights = self.all_attention_weights['MR']
-
                 if source_weights is not None:
                     self.att_pool.load_state_dict(source_weights)
+                else:
+                    print(f"AVISO CRÍTICO: Pesos de atenção não encontrados para {self.current_task_name}!")
+                    self.run_pooling = "ATTENTION-RANDOM-INITIALIZATION"
                 
                 # Se não achou pesos, ele usa a inicialização aleatória (CUIDADO!)
                 # Idealmente, o treino garante que sempre ache.
@@ -251,36 +265,44 @@ class SentenceEncoder:
             if name_agg == 'IN-TASK':
                 if self.current_task_name in self.dynamic_weights:
                     weights = self.dynamic_weights[self.current_task_name]
+                    self.run_layer = "IN-TASK" + "-" + str(self.current_task_name)
 
             # 2. LEAVE-ONE-OUT-SENTEVAL (Média do SentEval - Task Atual)
             elif name_agg == 'LEAVE-ONE-OUT-SENTEVAL':
                 target_tasks = [t for t in senteval_tasks if t != self.current_task_name]
                 weights = self._compute_mean_weights(target_tasks)
+                self.run_layer = "LEAVE-ONE-OUT-SENTEVAL"
 
             # 3. AVG-SENTEVAL (Média de todas do SentEval)
             elif name_agg == 'AVG-SENTEVAL':
                 # Tenta pegar direto do JSON se existir, senão calcula
                 if 'AVG_SENTEVAL' in self.dynamic_weights:
                     weights = self.dynamic_weights['AVG_SENTEVAL']
+                    self.run_layer = "AVG_SENTEVAL"
                 else:
                     weights = self._compute_mean_weights(senteval_tasks)
+                    self.run_layer = "AVG_SENTEVAL-CALCULADO"
 
             # 4. NLI (Usa pesos do NLI puro)
             elif name_agg == 'NLI':
                 if 'NLI' in self.dynamic_weights:
                     weights = self.dynamic_weights['NLI']
+                    self.run_layer = "NLI"
 
             # 5. LEAVE-ONE-OUT-SENTEVAL-NLI (Média de SentEval + NLI - Task Atual)
             elif name_agg == 'LEAVE-ONE-OUT-SENTEVAL-NLI':
                 target_tasks = [t for t in all_tasks_with_nli if t != self.current_task_name]
                 weights = self._compute_mean_weights(target_tasks)
+                self.run_layer = "LEAVE-ONE-OUT-SENTEVAL-NLI"
 
             # 6. AVG-ALL (Média de tudo + NLI) [Igual ao antigo UNIVERSAL]
             elif name_agg == 'AVG-ALL':
                 if 'AVG_ALL' in self.dynamic_weights:
                     weights = self.dynamic_weights['AVG_ALL']
+                    self.run_layer = "AVG-ALL"
                 else:
                     weights = self._compute_mean_weights(all_tasks_with_nli)
+                    self.run_layer = "AVG-ALL-CALCULADO"
 
             # --- FALLBACK DE SEGURANÇA ---
             # Se não achou pesos (ex: task nova sem pesos no JSON), usa média uniforme
@@ -288,8 +310,10 @@ class SentenceEncoder:
                 # Tenta fallback para AVG_ALL se não for uma estratégia Leave-Out específica
                 if 'AVG_ALL' in self.dynamic_weights:
                     weights = self.dynamic_weights['AVG_ALL']
+                    self.run_layer = "AVG-ALL-ELSE"
                 else:
                     weights = [1.0/len(hidden_states[-12:])] * len(hidden_states[-12:])
+                    self.run_layer = "AVG-ALL-UNIFORME"
 
             # Aplicação dos Pesos
             layers_to_fuse = torch.stack(hidden_states[-12:], dim=0) 

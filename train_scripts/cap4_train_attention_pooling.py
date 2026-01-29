@@ -57,7 +57,7 @@ class AttentionPooling(nn.Module):
         weights = self.context_vector(weights).squeeze(-1)
         
         # 2. Aplica máscara (ignora padding)
-        weights = weights.masked_fill(mask == 0, -1e9)
+        weights = weights.masked_fill(mask == 0, -1e4)
         
         # 3. Softmax para obter probabilidades
         weights = F.softmax(weights, dim=1)

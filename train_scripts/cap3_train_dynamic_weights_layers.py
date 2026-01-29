@@ -125,7 +125,7 @@ class TaskSpecificModel(nn.Module):
 
         input_mask_expanded = attention_mask.unsqueeze(-1).expand(fused_sequence.size()).float()
         sum_embeddings = torch.sum(fused_sequence * input_mask_expanded, 1)
-        sum_mask = torch.clamp(input_mask_expanded.sum(1), min=1e-9)
+        sum_mask = torch.clamp(input_mask_expanded.sum(1), min=1e-4)
         pooled_output = sum_embeddings / sum_mask
 
         logits = self.classifier(self.dropout(pooled_output))
