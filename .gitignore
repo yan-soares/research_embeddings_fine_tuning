@@ -6,10 +6,6 @@ __pycache__/
 # C extensions
 *.so
 
-data/nli_optimized_for_layer_search_full.csv
-train_scripts/experiments_cap_3
-train_scripts/experiments_cap_4
-
 # Distribution / packaging
 .Python
 build/

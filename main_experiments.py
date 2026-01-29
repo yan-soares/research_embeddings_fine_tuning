@@ -34,7 +34,7 @@ class AttentionPooling(nn.Module):
         # 2. Compara com contexto (u * energy)
         weights = self.context_vector(weights).squeeze(-1)
         # 3. Mascara padding (-inf)
-        weights = weights.masked_fill(mask == 0, -1e9)
+        weights = weights.masked_fill(mask == 0, -1e4)
         # 4. Softmax (Probabilidades)
         weights = F.softmax(weights, dim=1)
         # 5. Soma Ponderada
