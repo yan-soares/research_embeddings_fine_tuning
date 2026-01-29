@@ -343,6 +343,7 @@ def run_senteval(model_name, tasks, args, type_task):
     tempos = []  
     for pooling in pooling_strategies:
         encoder.pooling_strategy = pooling
+        print("-" * 60)
         print(f"\nRunning: Model={encoder.name_model}, Pooling={encoder.pooling_strategy}")
         if type_task == 'cl':
             senteval_params = {
@@ -360,8 +361,8 @@ def run_senteval(model_name, tasks, args, type_task):
         elapsed_time = (end_time - start_time) / 60
         tempos.append(elapsed_time)
 
-        print(f"Used: Layer_Weights={encoder.run_layer}, Pooling={encoder.run_pooling}")
-        
+        print(f"Used: Pooling={encoder.run_pooling} in Layer_Weights={encoder.run_layer}")
+                
         # ... (Logica de tempo mantida) ...
         tempo_faltante = (tempos[-1] * (len(pooling_strategies) - len(tempos))) / 60
         dias_faltante = tempo_faltante / 24
@@ -373,6 +374,7 @@ def run_senteval(model_name, tasks, args, type_task):
         print(f"--> Time for this run: {elapsed_time:.2f} minutes")     
         print(f"--> Tempo Faltante Estimado: {tempo_faltante:.2f} horas")  
         print(f"--> Dias Faltante Estimado: {dias_faltante:.2f} dias")
+        print("-" * 60)
                               
     return results_general
 
