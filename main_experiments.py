@@ -173,20 +173,7 @@ class SentenceEncoder:
                 source_weights = None
                 self.run_pooling = "ATTENTION-NOT-FOUND"
                 if self.all_attention_weights:
-                    # 1. Tenta carregar a chave da própria task
-                    # (Como nosso arquivo universal tem chaves para 'MR', 'CR', etc., isso vai funcionar sempre)
-                    if self.current_task_name in self.all_attention_weights:
-                        source_weights = self.all_attention_weights[self.current_task_name]
-                        self.run_pooling = "ATTENTION-TASK"
-                    
-                    # 2. Fallback: Se não achar a task, busca chaves genéricas universais
-                    elif 'UNIVERSAL' in self.all_attention_weights:
-                        source_weights = self.all_attention_weights['UNIVERSAL']
-                        self.run_pooling = "ATTENTION-UNIVERSAL"
-                    elif 'AVG_SENTEVAL' in self.all_attention_weights:
-                        source_weights = self.all_attention_weights['AVG_SENTEVAL']
-                        self.run_pooling = "ATTENTION-AVG-SENTEVAL"
-                    elif 'NLI' in self.all_attention_weights:
+                    if 'NLI' in self.all_attention_weights:
                         source_weights = self.all_attention_weights['NLI']
                         self.run_pooling = "ATTENTION-NLI"
                     
@@ -356,7 +343,7 @@ def run_senteval(model_name, tasks, args, type_task):
     tempos = []  
     for pooling in pooling_strategies:
         encoder.pooling_strategy = pooling
-        print(f"Used: Model={encoder.name_model}, Pooling={encoder.pooling_strategy}")
+        print(f"\nRunning: Model={encoder.name_model}, Pooling={encoder.pooling_strategy}")
         if type_task == 'cl':
             senteval_params = {
                 'task_path': 'data', 'usepytorch': False, 'kfold': args.kfold,
