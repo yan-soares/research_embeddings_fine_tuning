@@ -177,7 +177,7 @@ class SentenceEncoder:
                     # (Como nosso arquivo universal tem chaves para 'MR', 'CR', etc., isso vai funcionar sempre)
                     if self.current_task_name in self.all_attention_weights:
                         source_weights = self.all_attention_weights[self.current_task_name]
-                        self.run_pooling = "ATTENTION" + "-" + str(self.current_task_name)
+                        self.run_pooling = "ATTENTION-TASK"
                     
                     # 2. Fallback: Se não achar a task, busca chaves genéricas universais
                     elif 'UNIVERSAL' in self.all_attention_weights:
@@ -265,7 +265,7 @@ class SentenceEncoder:
             if name_agg == 'IN-TASK':
                 if self.current_task_name in self.dynamic_weights:
                     weights = self.dynamic_weights[self.current_task_name]
-                    self.run_layer = "IN-TASK" + "-" + str(self.current_task_name)
+                    self.run_layer = "IN-TASK"
 
             # 2. LEAVE-ONE-OUT-SENTEVAL (Média do SentEval - Task Atual)
             elif name_agg == 'LEAVE-ONE-OUT-SENTEVAL':
