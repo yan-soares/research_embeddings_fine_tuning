@@ -13,7 +13,6 @@ import seaborn as sns
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, f1_score
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-import copy
 import json
 import warnings
 from tqdm.auto import tqdm
@@ -24,30 +23,26 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 
 sys.path.append('/home/yansoares/research_embeddings_fine_tuning')
 
-# ==============================================================================
-# 0. CONFIGURAÇÃO DE CAMINHOS E LISTAS
-# ==============================================================================
-BASE_PATH = 'experiments_cap_3'
-NLI_CSV_PATH = '/home/yansoares/research_embeddings_fine_tuning/data/nli_optimized_for_layer_search.csv'
+BASE_PATH = 'cap3_results'
+NLI_CSV_PATH = '/home/yansoares/research_embeddings_fine_tuning/data/nli_optimized_for_layer_search_50k.csv'
 SENTEVAL_DATA_PATH = '/home/yansoares/research_embeddings_fine_tuning/data'
 
 from senteval.binary import CREval, MREval, MPQAEval, SUBJEval
 from senteval.trec import TRECEval
 from senteval.sst import SSTEval
 from senteval.mrpc import MRPCEval
+
 SENTEVAL_AVAILABLE = True
 
-# --- LISTA DE MODELOS (CLASSIFICAÇÃO) ---
 MODELS_TO_TEST = [
+    'microsoft/deberta-v3-base',
     'answerdotai/ModernBERT-base',
     'microsoft/deberta-v3-large',
-    'microsoft/deberta-v3-base', 
-    'bert-base-uncased',
+    'google-bert/bert-base-uncased',
     'FacebookAI/roberta-base',
 ]
 
 SEEDS = [42, 0, 1234, 2025, 999]
-#SEEDS = [42, 0]
 
 # ==============================================================================
 # 1. HIPERPARÂMETROS GERAIS
@@ -90,7 +85,6 @@ class DynamicFusionLayer(nn.Module):
 class TaskSpecificModel(nn.Module):
     def __init__(self, model_name, num_classes):
         super().__init__()
-        #self.config = AutoConfig.from_pretrained(model_name)
         self.backbone = AutoModel.from_pretrained(model_name)
 
         # Como deve estar para suportar ModernBERT e DeBERTa genericamente:
@@ -123,10 +117,7 @@ class TaskSpecificModel(nn.Module):
         
         fused_sequence, weights = self.fusion(outputs.hidden_states)
 
-        input_mask_expanded = attention_mask.unsqueeze(-1).expand(fused_sequence.size()).float()
-        sum_embeddings = torch.sum(fused_sequence * input_mask_expanded, 1)
-        sum_mask = torch.clamp(input_mask_expanded.sum(1), min=1e-4)
-        pooled_output = sum_embeddings / sum_mask
+        pooled_output = fused_sequence[:, 0, :]
 
         logits = self.classifier(self.dropout(pooled_output))
         return logits, weights

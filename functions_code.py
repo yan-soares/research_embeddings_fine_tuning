@@ -3,7 +3,7 @@ from itertools import combinations
 import numpy as np
 import pandas as pd
 import os
-from transformers import AutoTokenizer, AutoModel, DebertaV2Model, DebertaV2Tokenizer, BertTokenizer, BertModel, RobertaTokenizer, RobertaModel
+from transformers import AutoTokenizer, AutoModel, DebertaV2Model, DebertaV2Tokenizer, BertTokenizer, BertModel, RobertaTokenizer, RobertaModel, AutoModelForMaskedLM
 
 main_colunas = ['model', 'pooling', 'type_pooling','agg', 'layer', 'epochs', 'out_vec_size', 'qtd_layers', 'nhid', 'params', 'best_layers']
 
@@ -52,6 +52,19 @@ def load_model(model_name, device):
             model = DebertaV2Model.from_pretrained(name_model, output_hidden_states=True, attn_implementation="flash_attention_2").to(device)
         except:
             model = DebertaV2Model.from_pretrained(name_model, output_hidden_states=True).to(device)
+
+    elif model_name == 'modern-bert-base' or model_name == 'modern-bert-large':
+        if model_name == 'modern-bert-base':
+            name_model = 'answerdotai/ModernBERT-base'
+            qtd_layers = 22
+        if model_name == 'modern-bert-large':
+            name_model = 'answerdotai/ModernBERT-large'
+            qtd_layers = 28
+        tokenizer = AutoTokenizer.from_pretrained(name_model)
+        try:
+            model = AutoModelForMaskedLM.from_pretrained(name_model, output_hidden_states=True, attn_implementation="flash_attention_2").to(device)
+        except:
+            model = AutoModelForMaskedLM.from_pretrained(name_model, output_hidden_states=True).to(device)
     
     elif model_name == 'allmpnet':
         name_model = 'sentence-transformers/all-mpnet-base-v2'
