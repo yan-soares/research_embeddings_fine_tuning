@@ -341,10 +341,10 @@ def run_senteval(model_name, tasks, args, type_task):
     print("LISTA DE LAYERS: ", list_layers)
    
     tempos = []  
+    print("-" * 60)
     for pooling in pooling_strategies:
         encoder.pooling_strategy = pooling
-        print("-" * 60)
-        print(f"\nRunning: Model={encoder.name_model}, Pooling={encoder.pooling_strategy}")
+        print(f"Running: Model={encoder.name_model}, Pooling={encoder.pooling_strategy}")
         if type_task == 'cl':
             senteval_params = {
                 'task_path': 'data', 'usepytorch': False, 'kfold': args.kfold,
