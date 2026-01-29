@@ -357,6 +357,7 @@ def run_senteval(model_name, tasks, args, type_task):
     for pooling in pooling_strategies:
         encoder.pooling_strategy = pooling
         print(f"Running: Model={encoder.name_model}, Pooling={encoder.pooling_strategy}")
+        print(f"Running: Layer_Weights={encoder.run_layer}, Pooling={encoder.run_pooling}")
         if type_task == 'cl':
             senteval_params = {
                 'task_path': 'data', 'usepytorch': False, 'kfold': args.kfold,
