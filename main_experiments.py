@@ -356,6 +356,7 @@ def run_senteval(model_name, tasks, args, type_task):
     tempos = []  
     for pooling in pooling_strategies:
         encoder.pooling_strategy = pooling
+        print(f"Used: Model={encoder.name_model}, Pooling={encoder.pooling_strategy}")
         if type_task == 'cl':
             senteval_params = {
                 'task_path': 'data', 'usepytorch': False, 'kfold': args.kfold,
@@ -372,7 +373,6 @@ def run_senteval(model_name, tasks, args, type_task):
         elapsed_time = (end_time - start_time) / 60
         tempos.append(elapsed_time)
 
-        print(f"Used: Model={encoder.name_model}, Pooling={encoder.pooling_strategy}")
         print(f"Used: Layer_Weights={encoder.run_layer}, Pooling={encoder.run_pooling}")
         
         # ... (Logica de tempo mantida) ...
