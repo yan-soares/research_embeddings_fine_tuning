@@ -85,7 +85,7 @@ class DynamicFusionLayer(nn.Module):
 class TaskSpecificModel(nn.Module):
     def __init__(self, model_name, num_classes):
         super().__init__()
-        self.backbone = AutoModel.from_pretrained(model_name)
+        self.backbone = AutoModel.from_pretrained(model_name, output_hidden_states=True, return_dict=True)
 
         # Como deve estar para suportar ModernBERT e DeBERTa genericamente:
         self.config = AutoConfig.from_pretrained(model_name)
@@ -113,7 +113,7 @@ class TaskSpecificModel(nn.Module):
 
     def forward(self, input_ids, attention_mask):
         with torch.no_grad():
-            outputs = self.backbone(input_ids, attention_mask=attention_mask, output_hidden_states=True)
+            outputs = self.backbone(input_ids, attention_mask=attention_mask)
         
         fused_sequence, weights = self.fusion(outputs.hidden_states)
 
@@ -234,8 +234,8 @@ def train_task_engine(task_name, seed_idx=0, total_seeds=5): # Adicionei argumen
     train_ds = UnifiedDataset(X_train, y_train, tokenizer, CONFIG['max_len'], is_pair)
     val_ds = UnifiedDataset(X_val, y_val, tokenizer, CONFIG['max_len'], is_pair)
 
-    train_loader = DataLoader(train_ds, batch_size=CONFIG['batch_size'], shuffle=True, num_workers=4, pin_memory=True)
-    val_loader = DataLoader(val_ds, batch_size=CONFIG['batch_size'], num_workers=4, pin_memory=True)
+    train_loader = DataLoader(train_ds, batch_size=CONFIG['batch_size'], shuffle=True, num_workers=4, pin_memory=True, persistent_workers=True)
+    val_loader = DataLoader(val_ds, batch_size=CONFIG['batch_size'], num_workers=4, pin_memory=True, persistent_workers=True)
 
     model = TaskSpecificModel(CONFIG['model_name'], num_classes=num_classes).to(CONFIG['device'])
     optimizer = optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=CONFIG['lr'])
@@ -253,12 +253,20 @@ def train_task_engine(task_name, seed_idx=0, total_seeds=5): # Adicionei argumen
         # Train
         model.train()
         total_loss = 0
+        scaler = torch.cuda.amp.GradScaler(enabled=(CONFIG['device'] == 'cuda'))
+
         for batch in train_loader:
-            optimizer.zero_grad()
-            logits, _ = model(batch['input_ids'].to(CONFIG['device']), batch['attention_mask'].to(CONFIG['device']))
-            loss = criterion(logits, batch['labels'].to(CONFIG['device']))
-            loss.backward()
-            optimizer.step()
+            optimizer.zero_grad(set_to_none=True)
+
+            with torch.cuda.amp.autocast(enabled=(CONFIG['device'] == 'cuda')):
+                logits, _ = model(batch['input_ids'].to(CONFIG['device']),
+                                batch['attention_mask'].to(CONFIG['device']))
+                loss = criterion(logits, batch['labels'].to(CONFIG['device']))
+
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+
             total_loss += loss.item()
         
         # Val
@@ -419,6 +427,7 @@ if __name__ == "__main__":
                 df_weights.loc['AVG_SENTEVAL'] = df_weights.drop(['NLI', 'AVG_ALL'], errors='ignore').mean(axis=0)
             
             json_ready = df_weights.T.to_dict(orient='list')
+            json_ready = {k: [float(x) for x in v] for k, v in json_ready.items()}
             with open(os.path.join(MODEL_SAVE_DIR, 'dynamic_weights_mean.json'), 'w') as f:
                 json.dump(json_ready, f, indent=4)
             

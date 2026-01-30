@@ -62,9 +62,9 @@ def load_model(model_name, device):
             qtd_layers = 28
         tokenizer = AutoTokenizer.from_pretrained(name_model)
         try:
-            model = AutoModelForMaskedLM.from_pretrained(name_model, output_hidden_states=True, attn_implementation="flash_attention_2").to(device)
+            model = AutoModel.from_pretrained(name_model, output_hidden_states=True, attn_implementation="flash_attention_2").to(device)
         except:
-            model = AutoModelForMaskedLM.from_pretrained(name_model, output_hidden_states=True).to(device)
+            model = AutoModel.from_pretrained(name_model, output_hidden_states=True).to(device)
     
     elif model_name == 'allmpnet':
         name_model = 'sentence-transformers/all-mpnet-base-v2'

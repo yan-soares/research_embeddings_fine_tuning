@@ -96,7 +96,7 @@ class SentenceEncoder:
         self.cls_token_id = self.tokenizer.cls_token_id
         self.sep_token_id = self.tokenizer.sep_token_id
 
-    def _encode(self, sentences, current_task, batch_size=16384): 
+    def _encode(self, sentences, current_task, batch_size=2048): 
         self.current_task_name = current_task
         tokens = self.tokenizer(sentences, padding="longest", truncation=True, return_tensors="pt", max_length=self.model.config.max_position_embeddings)
         tokens = {key: val.to(self.device, non_blocking=True) for key, val in tokens.items()}
@@ -104,8 +104,9 @@ class SentenceEncoder:
 
         for i in range(0, len(sentences), batch_size):
             batch_tokens = {key: val[i:i+batch_size] for key, val in tokens.items()}
-            with torch.inference_mode(), torch.amp.autocast('cuda'):
-                output = self.model(**batch_tokens)
+            use_amp = (self.device.type == "cuda")
+            with torch.inference_mode(), torch.amp.autocast(device_type="cuda", enabled=use_amp):
+                output = self.model(**batch_tokens, output_hidden_states=True, return_dict=True)
                 embeddings = self._apply_pooling(output, batch_tokens['attention_mask'], batch_tokens['input_ids'])
             all_embeddings.append(embeddings)
 
@@ -242,7 +243,7 @@ class SentenceEncoder:
         # Lista das novas estratégias aceitas
         dynamic_strategies = [
             'IN-TASK', 'LEAVE-ONE-OUT-SENTEVAL', 'AVG-SENTEVAL', 
-            'NLI', 'LEAVE-ONE-OUT-SENTEVAL-NLI', 'AVG-ALL'
+            'NLI', 'LEAVE-ONE-OUT-SENTEVAL-NLI', 'AVG-ALL', 'STS'
         ]
 
         if name_agg in dynamic_strategies:
@@ -291,6 +292,18 @@ class SentenceEncoder:
                     weights = self._compute_mean_weights(all_tasks_with_nli)
                     self.run_layer = "AVG-ALL-CALCULADO"
 
+            elif name_agg == 'STS':
+                # tenta chave universal
+                if 'STS' in self.dynamic_weights:
+                    weights = self.dynamic_weights['STS']
+                    self.run_layer = "STS-UNIVERSAL"
+                else:
+                    # média de todas as tasks de similaridade que existirem no JSON
+                    sts_tasks = ['STS12', 'STS13', 'STS14', 'STS15', 'STS16', 'STSBenchmark', 'SICKRelatedness']
+                    weights = self._compute_mean_weights(sts_tasks)
+                    self.run_layer = "STS-MEAN"
+
+
             # --- FALLBACK DE SEGURANÇA ---
             # Se não achou pesos (ex: task nova sem pesos no JSON), usa média uniforme
             if weights is None:
@@ -302,9 +315,19 @@ class SentenceEncoder:
                     weights = [1.0/len(hidden_states[-12:])] * len(hidden_states[-12:])
                     self.run_layer = "AVG-ALL-UNIFORME"
 
-            # Aplicação dos Pesos
-            layers_to_fuse = torch.stack(hidden_states[-12:], dim=0) 
-            weights_tensor = torch.tensor(weights, device=self.device, dtype=layers_to_fuse.dtype)
+            encoder_layers = hidden_states[1:]
+            L = len(encoder_layers)
+
+            if weights is None:
+                print("sem pesos")
+            else:
+                if len(weights) != L:
+                    raise ValueError(
+                        f"[Layer mismatch] task={self.current_task_name} agg={name_agg} "
+                        f"len(weights)={len(weights)} len(layers)={L}"
+                    )
+
+            layers_to_fuse = torch.stack(encoder_layers, dim=0)
             weights_tensor = weights_tensor.view(-1, 1, 1, 1) 
             fused_layer = (layers_to_fuse * weights_tensor).sum(dim=0) 
             
@@ -352,7 +375,7 @@ def run_senteval(model_name, tasks, args, type_task):
                 'encoder': encoder
             }
         else:
-             senteval_params = {'task_path': 'data', 'usepytorch': False, 'kfold': 10, 'encoder': encoder}
+             senteval_params = {'task_path': 'data', 'usepytorch': False, 'encoder': encoder, 'batch_size': args.batch}
         
         se = senteval.engine.SE(senteval_params, functions_code.batcher)
         start_time = time.time()
@@ -424,6 +447,12 @@ def main(args):
         similarity_tasks = ['STS12', 'STS13', 'STS14', 'STS15', 'STS16', 'STSBenchmark', 'SICKRelatedness']
         similarity_tasks = args.tasks.split(",") if args.tasks is not None else similarity_tasks
         tasks_run(args, main_path, filename_si, similarity_tasks, 'si')
+
+    elif args.task_type == "glue":
+        filename_glue = "glue" + filename_task
+        glue_tasks = ['STS12', 'STS13', 'STS14', 'STS15', 'STS16', 'STSBenchmark', 'SICKRelatedness']
+        glue_tasks = args.tasks.split(",") if args.tasks is not None else glue_tasks
+        tasks_run(args, main_path, filename_glue, glue_tasks, 'glue')
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="SentEval Experiments")
