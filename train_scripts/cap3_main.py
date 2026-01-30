@@ -249,19 +249,20 @@ def train_task_engine(task_name, seed_idx=0, total_seeds=5): # Adicionei argumen
     # Cria uma barra de progresso para as ÉPOCAS
     epochs_bar = tqdm(range(CONFIG['epochs']), desc=f"Seed {seed_idx+1}/{total_seeds} | {task_name}", leave=False)
 
+    scaler = torch.cuda.amp.GradScaler(enabled=(CONFIG['device'] == 'cuda'))
+
     for epoch in epochs_bar:
         # Train
         model.train()
         total_loss = 0
-        scaler = torch.cuda.amp.GradScaler(enabled=(CONFIG['device'] == 'cuda'))
-
+       
         for batch in train_loader:
             optimizer.zero_grad(set_to_none=True)
 
             with torch.cuda.amp.autocast(enabled=(CONFIG['device'] == 'cuda')):
-                logits, _ = model(batch['input_ids'].to(CONFIG['device']),
-                                batch['attention_mask'].to(CONFIG['device']))
-                loss = criterion(logits, batch['labels'].to(CONFIG['device']))
+                logits, _ = model(batch['input_ids'].to(CONFIG['device'], non_blocking=True),
+                                batch['attention_mask'].to(CONFIG['device'], non_blocking=True))
+                loss = criterion(logits, batch['labels'].to(CONFIG['device'], non_blocking=True))
 
             scaler.scale(loss).backward()
             scaler.step(optimizer)

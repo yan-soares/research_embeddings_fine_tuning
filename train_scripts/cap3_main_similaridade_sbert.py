@@ -26,12 +26,7 @@ BASE_PATH = 'cap3_results_main_similaridade'
 SENTEVAL_DATA_PATH = '/home/yansoares/research_embeddings_fine_tuning/data'
 
 MODELS_TO_TEST = [
-    'microsoft/deberta-v3-base',
     'sentence-transformers/all-mpnet-base-v2'
-    'answerdotai/ModernBERT-base',
-    'microsoft/deberta-v3-large',
-    'google-bert/bert-base-uncased',
-    'FacebookAI/roberta-base',
 ]
 
 SEEDS = [42, 0, 1234, 2025, 999]
