@@ -20,16 +20,16 @@ from scipy.stats import pearsonr
 warnings.filterwarnings("ignore", category=SyntaxWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
 
-sys.path.append('/home/yansoares/research_embeddings_fine_tuning')
+sys.path.append('/home/yansoaresdell/research_embeddings_fine_tuning')
 
 BASE_PATH = 'cap3_results_main_similaridade'
-SENTEVAL_DATA_PATH = '/home/yansoares/research_embeddings_fine_tuning/data'
+SENTEVAL_DATA_PATH = '/home/yansoaresdell/research_embeddings_fine_tuning/data'
 
 MODELS_TO_TEST = [
     'microsoft/deberta-v3-base',
-    'sentence-transformers/all-mpnet-base-v2'
-    'answerdotai/ModernBERT-base',
-    'microsoft/deberta-v3-large',
+    'sentence-transformers/all-mpnet-base-v2',
+    #'answerdotai/ModernBERT-base',
+    #'microsoft/deberta-v3-large',
     'google-bert/bert-base-uncased',
     'FacebookAI/roberta-base',
 ]
@@ -48,7 +48,7 @@ CONFIG = {
     'max_len': 128,
     'device': 'cuda' if torch.cuda.is_available() else 'cpu',
     # Tasks de similaridade (mesmas do seu main.py)
-    'tasks': ['STS12', 'STS13', 'STS14', 'STS15', 'STS16', 'STSBenchmark', 'SICKRelatedness']
+    'tasks': ['SICKRelatedness', 'STSBenchmark']
 }
 
 if CONFIG['device'] == 'cpu':
@@ -166,82 +166,100 @@ def clean_for_json(obj):
     if isinstance(obj, list): return [clean_for_json(i) for i in obj]
     return obj
 
+def pearson_loss(pred, target, eps=1e-8):
+    pred = pred - pred.mean()
+    target = target - target.mean()
+
+    num = torch.sum(pred * target)
+    den = torch.sqrt(torch.sum(pred ** 2) * torch.sum(target ** 2)) + eps
+    return 1.0 - num / den
 
 # ==============================================================================
 # 5. LOADERS STS (compatível com arquivos SentEval)
 # ==============================================================================
-def _read_sts_file(path):
-    """
-    Lê TSV do SentEval STS (STS12-16, STSBenchmark, SICKRelatedness).
-    Tentativa robusta:
-      - separador tab
-      - score em uma coluna
-      - duas sentenças em duas colunas
-    """
-    if not os.path.exists(path):
-        return None
+def load_sick_relatedness():
+    base = os.path.join(SENTEVAL_DATA_PATH, "downstream", "SICK")
 
-    # STSBenchmark costuma ter colunas: genre, filename, year, score, s1, s2 (ou variações)
-    # Pra robustez: tenta pegar as 3 últimas colunas como (score, s1, s2) quando possível.
-    try:
-        df = pd.read_csv(path, sep='\t', header=None, quoting=3, on_bad_lines='skip')
-    except Exception:
-        return None
+    train_path = os.path.join(base, "SICK_train.txt")
+    dev_path   = os.path.join(base, "SICK_trial.txt")
 
-    if df.shape[1] < 3:
-        return None
+    if not (os.path.exists(train_path) and os.path.exists(dev_path)):
+        print(f"[ERRO] Arquivos do SICK não encontrados em {base}")
+        return None, None
 
-    # Heurística: score pode estar em uma coluna "parecida com float"
-    # Pegamos score = coluna -3 e s1,s2 = -2,-1 (isso funciona no seu script antigo e em muitos dumps).
-    score = df.iloc[:, -3]
-    s1 = df.iloc[:, -2]
-    s2 = df.iloc[:, -1]
+    def _read_sick(fpath):
+        rows = []
+        with open(fpath, "r", encoding="utf-8") as f:
+            header = f.readline().strip().split("\t")
+            for line in f:
+                cols = line.strip().split("\t")
+                if len(cols) < len(header):
+                    continue
 
-    score = pd.to_numeric(score, errors='coerce')
-    tmp = pd.DataFrame({'score': score, 's1': s1, 's2': s2}).dropna()
+                row = dict(zip(header, cols))
 
-    # normaliza para [0,1] se vier em [0,5]
-    if tmp['score'].max() > 1.0:
-        tmp['score'] = tmp['score'] / 5.0
+                # nomes padrão do SICK
+                s1 = row.get("sentence_A")
+                s2 = row.get("sentence_B")
+                score = row.get("relatedness_score")
 
-    return tmp
+                if s1 is None or s2 is None or score is None:
+                    continue
 
+                try:
+                    score = float(score)
+                except:
+                    continue
+
+                rows.append((s1, s2, score))
+
+        df = pd.DataFrame(rows, columns=["s1", "s2", "score"])
+
+        # normaliza 1..5 -> 0..1
+        if df["score"].max() > 1.0:
+            df["score"] = (df["score"] - 1.0) / 4.0
+
+        return df
+
+    train_df = _read_sick(train_path)
+    dev_df   = _read_sick(dev_path)
+
+    if len(train_df) == 0 or len(dev_df) == 0:
+        print("[ERRO] SICK train/dev vazios")
+        return None, None
+
+    return train_df, dev_df
+
+def load_stsbenchmark():
+    base = os.path.join(SENTEVAL_DATA_PATH, "downstream", "stsbenchmark")
+
+    def _read(path):
+        rows = []
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                cols = line.rstrip("\n").split("\t")
+                if len(cols) < 7:
+                    continue
+                score = float(cols[4])
+                s1 = cols[5]
+                s2 = cols[6]
+                rows.append((s1, s2, score))
+
+        df = pd.DataFrame(rows, columns=["s1", "s2", "score"])
+        df["score"] = df["score"] / 5.0
+        return df
+
+    train_df = _read(os.path.join(base, "sts-train.csv"))
+    dev_df   = _read(os.path.join(base, "sts-dev.csv"))
+
+    return train_df, dev_df
 
 def load_sts_task(task_name):
-    """
-    Retorna (train_df, dev_df) para uma task.
-    Estrutura esperada em data/downstream:
-      - STSBenchmark: data/downstream/STSBenchmark/sts-train.csv / sts-dev.csv (ou tsv)
-      - SICKRelatedness: varia
-      - STS12-16: varia
+    if task_name == "STSBenchmark":
+        return load_stsbenchmark()
 
-    Como seu setup pode ter variações, este loader tenta múltiplos caminhos.
-    """
-    candidates = []
-
-    # caminhos comuns
-    candidates.append((task_name, os.path.join(SENTEVAL_DATA_PATH, 'downstream', task_name)))
-    candidates.append((task_name, os.path.join(SENTEVAL_DATA_PATH, 'downstream', task_name.lower())))
-    candidates.append((task_name, os.path.join(SENTEVAL_DATA_PATH, 'downstream', task_name.upper())))
-
-    # STSBenchmark às vezes está como "stsbenchmark"
-    if task_name == 'STSBenchmark':
-        candidates.append((task_name, os.path.join(SENTEVAL_DATA_PATH, 'downstream', 'stsbenchmark')))
-        candidates.append((task_name, os.path.join(SENTEVAL_DATA_PATH, 'downstream', 'stsbenchmark', 'stsbenchmark')))
-
-    # tenta achar arquivos train/dev com nomes comuns
-    possible_train = ['sts-train.csv', 'sts-train.tsv', 'train.tsv', 'train.txt', 'train.csv']
-    possible_dev   = ['sts-dev.csv', 'sts-dev.tsv', 'dev.tsv', 'dev.txt', 'dev.csv', 'valid.tsv', 'val.tsv']
-
-    for _, base in candidates:
-        for tr in possible_train:
-            for dv in possible_dev:
-                tr_path = os.path.join(base, tr)
-                dv_path = os.path.join(base, dv)
-                tr_df = _read_sts_file(tr_path)
-                dv_df = _read_sts_file(dv_path)
-                if tr_df is not None and dv_df is not None and len(tr_df) > 0 and len(dv_df) > 0:
-                    return tr_df, dv_df
+    if task_name == "SICKRelatedness":
+        return load_sick_relatedness()
 
     return None, None
 
@@ -271,10 +289,11 @@ def train_sts_engine(task_name, seed_idx=0, total_seeds=5):
 
     model = STSTaskModel(CONFIG['model_name']).to(CONFIG['device'])
 
-    optimizer = optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=CONFIG['lr'])
+    optimizer = optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=CONFIG['lr'], weight_decay=0.01)
     scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=3)
 
     # loss em regressão: MSE entre cos_sim e score
+    
     criterion = nn.MSELoss()
 
     history = {'train_loss': [], 'dev_pearson': [], 'weight_evolution': []}
@@ -304,7 +323,10 @@ def train_sts_engine(task_name, seed_idx=0, total_seeds=5):
 
                 pred = F.cosine_similarity(va, vb)
                 pred01 = (pred + 1.0) / 2.0
-                loss = criterion(pred01, y)
+                mse = criterion(pred01, y)
+                loss = 0.5 * pearson_loss(pred01, y) + 0.5 * mse
+
+                #loss = pearson_loss(pred01, y)
 
             scaler.scale(loss).backward()
             scaler.step(optimizer)
@@ -459,7 +481,7 @@ if __name__ == "__main__":
                 json.dump(hist_cleaned, f)
 
             plt.figure(figsize=(18, 12))
-            sns.heatmap(df_weights, annot=False, cmap="YlGnBu")
+            sns.heatmap(df_weights, annot=True, fmt=".3f", cmap="YlGnBu")
             plt.title(f"Pesos Médios das Camadas (STS) - {model_name} (Seeds)")
             plt.tight_layout()
             plt.savefig(os.path.join(MODEL_SAVE_DIR, "heatmap_mean_weights.png"), dpi=300)

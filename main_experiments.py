@@ -16,8 +16,8 @@ import numpy as np
 import functions_code
 
 warnings.filterwarnings("ignore", category=ConvergenceWarning)
-torch.backends.cudnn.benchmark = True
-torch.backends.cudnn.deterministic = False
+torch.backends.cudnn.benchmark = False
+torch.backends.cudnn.deterministic = True
 
 # ==============================================================================
 # CLASSES
@@ -328,8 +328,11 @@ class SentenceEncoder:
                     )
 
             layers_to_fuse = torch.stack(encoder_layers, dim=0)
-            weights_tensor = weights_tensor.view(-1, 1, 1, 1) 
-            fused_layer = (layers_to_fuse * weights_tensor).sum(dim=0) 
+
+            weights_tensor = torch.tensor(weights, device=layers_to_fuse.device, dtype=layers_to_fuse.dtype)
+            weights_tensor = weights_tensor.view(-1, 1, 1, 1)
+            fused_layer = (layers_to_fuse * weights_tensor).sum(dim=0)
+
             
             return self._get_pooling_result(fused_layer, attention_mask, name_pooling, name_agg, input_ids)
 

@@ -1,2 +1,3 @@
 Task,Pearson (Mean ± Std)
-STSBenchmark,0.6491 ± 0.0000
+SICKRelatedness,0.6488 ± 0.0000
+STSBenchmark,0.6496 ± 0.0001
