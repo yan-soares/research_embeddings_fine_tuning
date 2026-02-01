@@ -5,3 +5,7 @@ python main_experiments.py --models deberta-base --poolings all --agg_layers DYN
 
 
 python main_experiments.py --models deberta-base --poolings AVG,AVG+AVG-NS,CLS+AVG+AVG-NS,CLS+AVG,AVG-NS,CLS+AVG-NS --agg_layers IN-TASK,LEAVE-ONE-OUT-SENTEVAL,AVG-SENTEVAL,NLI,LEAVE-ONE-OUT-SENTEVAL-NLI,AVG-ALL --save_dir cl_deberta_cap3_principais_poolings --dynamic_weights_path cap3_dynamic_layers_weights/dynamic_weights_universal_v5.json && python main_experiments.py --task_type similarity --models deberta-base --poolings AVG,AVG+AVG-NS,CLS+AVG+AVG-NS,CLS+AVG,AVG-NS,CLS+AVG-NS --agg_layers IN-TASK,LEAVE-ONE-OUT-SENTEVAL,AVG-SENTEVAL,NLI,LEAVE-ONE-OUT-SENTEVAL-NLI,AVG-ALL --save_dir si_deberta_cap3_principais_poolings --dynamic_weights_path cap3_dynamic_layers_weights/dynamic_weights_universal_v5.json
+
+
+
+python cap3_main_classificacao.py --pooling_type avg --base_path final_results_cap3 && python cap3_main_classificacao.py --pooling_type cls --base_path final_results_cap3 && python cap3_main_classificacao.py --pooling_type cls_avg --base_path final_results_cap3

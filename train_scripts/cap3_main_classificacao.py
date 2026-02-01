@@ -24,7 +24,6 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 
 sys.path.append('/home/yansoaresdell/research_embeddings_fine_tuning')
 
-BASE_PATH = 'cap3_results'
 NLI_CSV_PATH = '/home/yansoaresdell/research_embeddings_fine_tuning/data/nli_optimized_for_layer_search_50k.csv'
 SENTEVAL_DATA_PATH = '/home/yansoaresdell/research_embeddings_fine_tuning/data'
 
@@ -44,13 +43,13 @@ SENTEVAL_AVAILABLE = True
 #    #'FacebookAI/roberta-base',
 #]
 
-SEEDS = [42, 0, 1234]#, 2025, 999]
+SEEDS = [42, 0, 1234, 2025, 999]
 
 # ==============================================================================
 # 1. HIPERPARÂMETROS GERAIS
 # ==============================================================================
 MAX_EPOCHS = 50
-PATIENCE = 3
+PATIENCE = 4
 
 CONFIG = {
     'epochs': MAX_EPOCHS,
@@ -58,7 +57,9 @@ CONFIG = {
     'max_len': 128,
     'device': 'cuda' if torch.cuda.is_available() else 'cpu',
     # Apenas tasks de classificação
-    'tasks': ['MR', 'CR', 'SUBJ', 'MPQA', 'SST2', 'TREC', 'MRPC', 'NLI']
+    'tasks': ['MR', 'CR', 'SUBJ', 'MPQA', 'SST2', 'TREC', 'MRPC', 'NLI'],
+    #'tasks': ['CR'],
+    'seed_size': len(SEEDS)
 }
 
 if CONFIG['device'] == 'cpu':
@@ -275,12 +276,12 @@ def train_task_engine(task_name, seed_idx=0, total_seeds=5): # Adicionei argumen
     optimizer = optim.AdamW([
     {
         'params': fusion_params, 
-        'lr': CONFIG['lr'] * 0.1,  # 1e-4: Mais cauteloso para achar os pesos ótimos
-        'weight_decay': 0.01
+        'lr': CONFIG['lr'],
+        'weight_decay': 0.0
     },
     {
         'params': classifier_params, 
-        'lr': CONFIG['lr'],        # 1e-3: Mais rápido para aprender a tarefa
+        'lr': CONFIG['lr'],
         'weight_decay': 0.01
     }
     ])
@@ -313,7 +314,7 @@ def train_task_engine(task_name, seed_idx=0, total_seeds=5): # Adicionei argumen
 
             scaler.scale(loss).backward()
             scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            torch.nn.utils.clip_grad_norm_(list(model.fusion.parameters()) + list(model.classifier.parameters()), 1.0)
             scaler.step(optimizer)
             scaler.update()
 
@@ -325,7 +326,7 @@ def train_task_engine(task_name, seed_idx=0, total_seeds=5): # Adicionei argumen
         curr_w = None
         with torch.no_grad():
             for batch in val_loader:
-                logits, w = model(batch['input_ids'].to(CONFIG['device']), batch['attention_mask'].to(CONFIG['device']))
+                logits, w = model(batch['input_ids'].to(CONFIG['device'], non_blocking=True), batch['attention_mask'].to(CONFIG['device'], non_blocking=True))
                 preds.extend(torch.argmax(logits, dim=1).cpu().numpy())
                 targets.extend(batch['labels'].cpu().numpy())
                 if curr_w is None: curr_w = w.detach().cpu().numpy().tolist()
@@ -339,11 +340,16 @@ def train_task_engine(task_name, seed_idx=0, total_seeds=5): # Adicionei argumen
         history['val_acc'].append(acc)
         history['val_f1'].append(f1)
         history['weight_evolution'].append(curr_w)
-        
-        # 3. Mude o loop "for epoch in range..." por isto:
-        epochs_bar.set_postfix({'Loss': f"{avg_loss:.4f}", 'Acc': f"{acc:.4f}"})
 
-        metric = f1  # ou acc, mas recomendo f1
+        if curr_w is None:
+            entropy = float("nan")
+        else:
+            w_entropy = np.array(curr_w, dtype=np.float64)
+            entropy = -(w_entropy * np.log(w_entropy + 1e-12)).sum()
+
+        epochs_bar.set_postfix({'Loss': f"{avg_loss:.4f}", 'Acc': f"{acc:.4f}", 'H': f"{entropy:.2f}"})
+
+        metric = acc  # SentEval: selecione por Accuracy
         if metric > best_val_metric:
             best_val_metric = metric
             best_weights = curr_w
@@ -364,14 +370,16 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Treinamento Task-Specific com Fusão de Camadas')
     parser.add_argument('--model_name', type=str, default='microsoft/deberta-v3-base', help='Nome do modelo no HuggingFace')
     parser.add_argument('--pooling_type', type=str, default='avg', choices=['avg', 'cls', 'cls_avg'], help='Estratégia de pooling')
+    parser.add_argument('--base_path', type=str, default='cap3', help='Estratégia de pooling')
     #parser.add_argument('--batch_size', type=int, default=128, help='Tamanho do batch')
-    
+   
     args = parser.parse_args()
 
     # Atualiza o CONFIG global com os argumentos passados
     CONFIG['model_name'] = args.model_name
     CONFIG['pooling_type'] = args.pooling_type
     #CONFIG['batch_size'] = args.batch_size
+    BASE_PATH = args.base_path
 
     # --- AQUI ESTÁ O USO DA SUA RTX 8000 ---
     if 'large' in CONFIG['model_name'].lower():
@@ -426,7 +434,7 @@ if __name__ == "__main__":
             else:
                 print(f"   ❌ Falha na seed {seed}")
 
-        # --- Pós-processamento (Média das 5 seeds) ---
+        # --- Pós-processamento (Média das seeds) ---
         if len(task_weights_runs) > 0:
             weights_np = np.array(task_weights_runs)
             acc_np = np.array(task_acc_runs)
@@ -497,8 +505,8 @@ if __name__ == "__main__":
             json.dump(hist_cleaned, f)
 
         plt.figure(figsize=(18, 12))
-        sns.heatmap(df_weights, annot=True, fmt=".3f", cmap="YlGnBu")
-        plt.title(f"Pesos Médios das Camadas - {CONFIG['model_name']} (5 Seeds)")
+        sns.heatmap(df_weights, annot=True, fmt=".2f", cmap="YlGnBu")
+        plt.title(f"Pesos Médios das Camadas - {CONFIG['model_name']} - {CONFIG['seed_size']}")
         plt.tight_layout()
         plt.savefig(os.path.join(MODEL_SAVE_DIR, "heatmap_mean_weights.png"), dpi=300)
         plt.close()

@@ -22,16 +22,16 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 
 sys.path.append('/home/yansoaresdell/research_embeddings_fine_tuning')
 
-BASE_PATH = 'cap3_results_main_similaridade'
+BASE_PATH = 'final_results_cap3_similaridade'
 SENTEVAL_DATA_PATH = '/home/yansoaresdell/research_embeddings_fine_tuning/data'
 
 MODELS_TO_TEST = [
-    'microsoft/deberta-v3-base',
     'sentence-transformers/all-mpnet-base-v2',
+    'microsoft/deberta-v3-base',    
     #'answerdotai/ModernBERT-base',
     #'microsoft/deberta-v3-large',
-    'google-bert/bert-base-uncased',
-    'FacebookAI/roberta-base',
+    #'google-bert/bert-base-uncased',
+    #'FacebookAI/roberta-base',
 ]
 
 SEEDS = [42, 0, 1234, 2025, 999]
@@ -40,7 +40,7 @@ SEEDS = [42, 0, 1234, 2025, 999]
 # 1. HIPERPARÂMETROS GERAIS (espelhado)
 # ==============================================================================
 MAX_EPOCHS = 50
-PATIENCE = 3
+PATIENCE = 4
 
 CONFIG = {
     'epochs': MAX_EPOCHS,
@@ -91,20 +91,25 @@ class STSTaskModel(nn.Module):
 
         for p in self.backbone.parameters():
             p.requires_grad = False
+        self.backbone.eval()
 
         self.fusion = DynamicFusionLayer(num_layers=self.n_layers)
 
     def forward(self, input_ids, attention_mask):
-        with torch.no_grad():
+        with torch.inference_mode():
             outputs = self.backbone(input_ids, attention_mask=attention_mask)
 
         fused_sequence, weights = self.fusion(outputs.hidden_states)
 
-        # Mean pooling (AVG)
         mask = attention_mask.unsqueeze(-1).expand(fused_sequence.size()).float()
         pooled = torch.sum(fused_sequence * mask, 1) / torch.clamp(mask.sum(1), min=1e-4)
 
         return pooled, weights
+
+    def train(self, mode=True):
+        super().train(mode)
+        self.backbone.eval()
+
 
 
 # ==============================================================================
@@ -278,25 +283,23 @@ def train_sts_engine(task_name, seed_idx=0, total_seeds=5):
     train_ds = STSPairDataset(train_df['s1'].values, train_df['s2'].values, train_df['score'].values, tokenizer, CONFIG['max_len'])
     dev_ds   = STSPairDataset(dev_df['s1'].values, dev_df['s2'].values, dev_df['score'].values, tokenizer, CONFIG['max_len'])
 
-    train_loader = DataLoader(
-        train_ds, batch_size=CONFIG['batch_size'], shuffle=True,
-        num_workers=4, pin_memory=True, persistent_workers=True
-    )
-    dev_loader = DataLoader(
-        dev_ds, batch_size=CONFIG['batch_size'],
-        num_workers=4, pin_memory=True, persistent_workers=True
-    )
+    train_loader = DataLoader(train_ds, batch_size=CONFIG['batch_size'], shuffle=True,
+                              num_workers=4, pin_memory=True, persistent_workers=True)
+    dev_loader = DataLoader(dev_ds, batch_size=CONFIG['batch_size'],
+                            num_workers=4, pin_memory=True, persistent_workers=True)
 
     model = STSTaskModel(CONFIG['model_name']).to(CONFIG['device'])
 
-    optimizer = optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=CONFIG['lr'], weight_decay=0.01)
+    # ✅ ALINHADO AO CLASSIFICADOR: WD=0 na fusão
+    fusion_params = list(model.fusion.parameters())
+    optimizer = optim.AdamW([
+        {'params': fusion_params, 'lr': CONFIG['lr'], 'weight_decay': 0.0},
+    ])
+
     scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=3)
+    criterion_mse = nn.MSELoss()
 
-    # loss em regressão: MSE entre cos_sim e score
-    
-    criterion = nn.MSELoss()
-
-    history = {'train_loss': [], 'dev_pearson': [], 'weight_evolution': []}
+    history = {'train_loss': [], 'dev_pearson': [], 'weight_evolution': [], 'entropy': []}
     best_dev = -1.0
     best_weights = None
     patience_counter = 0
@@ -321,14 +324,18 @@ def train_sts_engine(task_name, seed_idx=0, total_seeds=5):
                 va, _ = model(a_ids, a_msk)
                 vb, _ = model(b_ids, b_msk)
 
-                pred = F.cosine_similarity(va, vb)
+                pred = F.cosine_similarity(va, vb).clamp(-1.0, 1.0)
                 pred01 = (pred + 1.0) / 2.0
-                mse = criterion(pred01, y)
+
+                mse = criterion_mse(pred01, y)
                 loss = 0.5 * pearson_loss(pred01, y) + 0.5 * mse
 
-                #loss = pearson_loss(pred01, y)
-
             scaler.scale(loss).backward()
+
+            # ✅ ALINHADO: clip (com unscale)
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(fusion_params, 1.0)
+
             scaler.step(optimizer)
             scaler.update()
 
@@ -338,6 +345,7 @@ def train_sts_engine(task_name, seed_idx=0, total_seeds=5):
         model.eval()
         all_preds, all_labels = [], []
         curr_w = None
+
         with torch.no_grad():
             for batch in dev_loader:
                 a_ids = batch['a_ids'].to(CONFIG['device'], non_blocking=True)
@@ -347,12 +355,12 @@ def train_sts_engine(task_name, seed_idx=0, total_seeds=5):
 
                 va, w = model(a_ids, a_msk)
                 vb, _ = model(b_ids, b_msk)
-                pred = F.cosine_similarity(va, vb)     # torch tensor
-                pred01 = (pred + 1.0) / 2.0            # torch tensor [0,1]
+
+                pred = F.cosine_similarity(va, vb).clamp(-1.0, 1.0)
+                pred01 = (pred + 1.0) / 2.0
 
                 all_preds.extend(pred01.detach().cpu().numpy())
                 all_labels.extend(batch['label'].cpu().numpy())
-
 
                 if curr_w is None:
                     curr_w = w.detach().cpu().numpy().tolist()
@@ -366,9 +374,16 @@ def train_sts_engine(task_name, seed_idx=0, total_seeds=5):
         history['dev_pearson'].append(dev_pearson)
         history['weight_evolution'].append(curr_w)
 
-        epochs_bar.set_postfix({'Loss': f"{avg_loss:.4f}", 'Pearson': f"{dev_pearson:.4f}"})
+        # ✅ Log de entropia (igual ao classificador)
+        if curr_w is None:
+            entropy = float("nan")
+        else:
+            w_arr = np.array(curr_w, dtype=np.float64)
+            entropy = -(w_arr * np.log(w_arr + 1e-12)).sum()
+        history['entropy'].append(entropy)
 
-        # Early stopping (mesma lógica)
+        epochs_bar.set_postfix({'Loss': f"{avg_loss:.4f}", 'Pearson': f"{dev_pearson:.4f}", 'H': f"{entropy:.2f}"})
+
         if dev_pearson > best_dev:
             best_dev = dev_pearson
             best_weights = curr_w
@@ -378,14 +393,8 @@ def train_sts_engine(task_name, seed_idx=0, total_seeds=5):
             if patience_counter >= PATIENCE:
                 epochs_bar.write(f"   -> Early Stopping na época {epoch+1}")
                 break
-        
-        if curr_w is not None:
-            s = sum(curr_w)
-            if not (0.999 <= s <= 1.001):
-                print(f"[WARN] soma pesos {task_name} = {s}")
 
     return best_weights, best_dev, history
-
 
 # ==============================================================================
 # 7. MAIN (loop modelos + tasks + seeds, igual ao de classificação)
