@@ -1,0 +1,16 @@
+============================================================
+INÍCIO DO TREINO: google-bert/bert-base-uncased | avg
+============================================================
+
+Task: MR , Seed: 1 -> Early Stopping na época 13, Acc: 0.8129, Loss: 0.3888
+Task: MR , Seed: 2 -> Early Stopping na época 15, Acc: 0.8078, Loss: 0.3840
+Task: MR , Seed: 3 -> Early Stopping na época 19, Acc: 0.8134, Loss: 0.3821
+Task: MR , Seed: 4 -> Early Stopping na época 12, Acc: 0.8125, Loss: 0.3911
+Task: MR , Seed: 5 -> Early Stopping na época 29, Acc: 0.8120, Loss: 0.3743
+✅ MR Final: 0.8148 ± 0.0018 (Seeds: 5)
+Task: CR , Seed: 1 -> Early Stopping na época 13, Acc: 0.8543, Loss: 0.3024
+Task: CR , Seed: 2 -> Early Stopping na época 19, Acc: 0.8636, Loss: 0.2778
+Task: CR , Seed: 3 -> Early Stopping na época 18, Acc: 0.8596, Loss: 0.2819
+Task: CR , Seed: 4 -> Early Stopping na época 15, Acc: 0.8543, Loss: 0.2913
+Task: CR , Seed: 5 -> Early Stopping na época 17, Acc: 0.8583, Loss: 0.2873
+✅ CR Final: 0.8630 ± 0.0031 (Seeds: 5)

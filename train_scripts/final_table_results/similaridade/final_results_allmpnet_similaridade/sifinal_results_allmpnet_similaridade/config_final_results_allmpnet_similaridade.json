@@ -1,0 +1,29 @@
+{
+    "task_type": "similarity",
+    "models": [
+        "allmpnet"
+    ],
+    "epochs": 4,
+    "batch": 64,
+    "kfold": 10,
+    "optim": "adam",
+    "nhid": 0,
+    "initial_layer": 12,
+    "final_layer": 12,
+    "poolings": [
+        "CLS",
+        "AVG",
+        "AVG-NS",
+        "CLS+AVG",
+        "AVG+AVG-NS",
+        "CLS+AVG-NS",
+        "CLS+AVG+AVG-NS"
+    ],
+    "agg_layers": [
+        "AVG-ALL"
+    ],
+    "tasks": null,
+    "save_dir": "final_results_allmpnet_similaridade",
+    "dynamic_weights_path": "train_scripts/final_results_cap3_similaridade/results_cap3_sentence-transformers_all-mpnet-base-v2/dynamic_weights_mean.json",
+    "attention_weights_path": null
+}

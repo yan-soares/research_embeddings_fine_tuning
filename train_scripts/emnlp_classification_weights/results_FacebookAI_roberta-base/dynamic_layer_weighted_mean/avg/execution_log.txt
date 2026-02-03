@@ -1,0 +1,12 @@
+============================================================
+INÍCIO DO TREINO: FacebookAI/roberta-base | avg
+============================================================
+
+Task: MR , Seed: 1 -> Early Stopping na época 15, Acc: 0.8406, Loss: 0.3250
+Task: MR , Seed: 2 -> Early Stopping na época 24, Acc: 0.8453, Loss: 0.3126
+Task: MR , Seed: 3 -> Early Stopping na época 24, Acc: 0.8458, Loss: 0.3110
+Task: MR , Seed: 4 -> Early Stopping na época 22, Acc: 0.8429, Loss: 0.3127
+Task: MR , Seed: 5 -> Early Stopping na época 20, Acc: 0.8439, Loss: 0.3164
+✅ MR Final: 0.8463 ± 0.0016 (Seeds: 5)
+Task: CR , Seed: 1 -> Early Stopping na época 34, Acc: 0.8980, Loss: 0.2115
+Task: CR , Seed: 2 -> Early Stopping na época 39, Acc: 0.8901, Loss: 0.2017

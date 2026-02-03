@@ -1,0 +1,84 @@
+2026-02-02 09:23:06,886 - INFO - Computing embedding for train
+2026-02-02 09:23:18,334 - INFO - Computed train embeddings
+2026-02-02 09:23:18,334 - INFO - Computing embedding for dev
+2026-02-02 09:23:21,563 - INFO - Computed dev embeddings
+2026-02-02 09:23:21,563 - INFO - Computing embedding for test
+2026-02-02 09:23:24,313 - INFO - Computed test embeddings
+2026-02-02 09:30:06,747 - INFO - Computing embedding for train
+2026-02-02 09:30:15,591 - INFO - Computed train embeddings
+2026-02-02 09:30:15,591 - INFO - Computing embedding for dev
+2026-02-02 09:30:16,577 - INFO - Computed dev embeddings
+2026-02-02 09:30:16,577 - INFO - Computing embedding for test
+2026-02-02 09:30:26,159 - INFO - Computed test embeddings
+2026-02-02 09:36:40,473 - INFO - Computing embedding for train
+2026-02-02 09:36:52,042 - INFO - Computed train embeddings
+2026-02-02 09:36:52,042 - INFO - Computing embedding for dev
+2026-02-02 09:36:55,352 - INFO - Computed dev embeddings
+2026-02-02 09:36:55,353 - INFO - Computing embedding for test
+2026-02-02 09:36:58,180 - INFO - Computed test embeddings
+2026-02-02 09:38:42,297 - INFO - Computing embedding for train
+2026-02-02 09:38:51,380 - INFO - Computed train embeddings
+2026-02-02 09:38:51,380 - INFO - Computing embedding for dev
+2026-02-02 09:38:52,392 - INFO - Computed dev embeddings
+2026-02-02 09:38:52,413 - INFO - Computing embedding for test
+2026-02-02 09:39:02,472 - INFO - Computed test embeddings
+2026-02-02 09:41:12,808 - INFO - Computing embedding for train
+2026-02-02 09:41:25,618 - INFO - Computed train embeddings
+2026-02-02 09:41:25,618 - INFO - Computing embedding for dev
+2026-02-02 09:41:29,203 - INFO - Computed dev embeddings
+2026-02-02 09:41:29,203 - INFO - Computing embedding for test
+2026-02-02 09:41:32,272 - INFO - Computed test embeddings
+2026-02-02 09:43:17,081 - INFO - Computing embedding for train
+2026-02-02 09:43:27,053 - INFO - Computed train embeddings
+2026-02-02 09:43:27,053 - INFO - Computing embedding for dev
+2026-02-02 09:43:28,157 - INFO - Computed dev embeddings
+2026-02-02 09:43:28,157 - INFO - Computing embedding for test
+2026-02-02 09:43:38,947 - INFO - Computed test embeddings
+2026-02-02 09:45:30,941 - INFO - Computing embedding for train
+2026-02-02 09:45:42,475 - INFO - Computed train embeddings
+2026-02-02 09:45:42,475 - INFO - Computing embedding for dev
+2026-02-02 09:45:45,728 - INFO - Computed dev embeddings
+2026-02-02 09:45:45,728 - INFO - Computing embedding for test
+2026-02-02 09:45:48,493 - INFO - Computed test embeddings
+2026-02-02 09:47:33,499 - INFO - Computing embedding for train
+2026-02-02 09:47:42,426 - INFO - Computed train embeddings
+2026-02-02 09:47:42,427 - INFO - Computing embedding for dev
+2026-02-02 09:47:43,418 - INFO - Computed dev embeddings
+2026-02-02 09:47:43,418 - INFO - Computing embedding for test
+2026-02-02 09:47:53,165 - INFO - Computed test embeddings
+2026-02-02 09:50:04,401 - INFO - Computing embedding for train
+2026-02-02 09:50:17,036 - INFO - Computed train embeddings
+2026-02-02 09:50:17,037 - INFO - Computing embedding for dev
+2026-02-02 09:50:20,631 - INFO - Computed dev embeddings
+2026-02-02 09:50:20,631 - INFO - Computing embedding for test
+2026-02-02 09:50:23,701 - INFO - Computed test embeddings
+2026-02-02 09:52:08,734 - INFO - Computing embedding for train
+2026-02-02 09:52:18,663 - INFO - Computed train embeddings
+2026-02-02 09:52:18,663 - INFO - Computing embedding for dev
+2026-02-02 09:52:19,768 - INFO - Computed dev embeddings
+2026-02-02 09:52:19,768 - INFO - Computing embedding for test
+2026-02-02 09:52:30,561 - INFO - Computed test embeddings
+2026-02-02 09:54:25,324 - INFO - Computing embedding for train
+2026-02-02 09:54:37,958 - INFO - Computed train embeddings
+2026-02-02 09:54:37,958 - INFO - Computing embedding for dev
+2026-02-02 09:54:41,555 - INFO - Computed dev embeddings
+2026-02-02 09:54:41,555 - INFO - Computing embedding for test
+2026-02-02 09:54:44,618 - INFO - Computed test embeddings
+2026-02-02 09:56:29,795 - INFO - Computing embedding for train
+2026-02-02 09:56:39,720 - INFO - Computed train embeddings
+2026-02-02 09:56:39,720 - INFO - Computing embedding for dev
+2026-02-02 09:56:40,819 - INFO - Computed dev embeddings
+2026-02-02 09:56:40,819 - INFO - Computing embedding for test
+2026-02-02 09:56:51,628 - INFO - Computed test embeddings
+2026-02-02 09:58:46,033 - INFO - Computing embedding for train
+2026-02-02 09:58:58,670 - INFO - Computed train embeddings
+2026-02-02 09:58:58,670 - INFO - Computing embedding for dev
+2026-02-02 09:59:02,262 - INFO - Computed dev embeddings
+2026-02-02 09:59:02,262 - INFO - Computing embedding for test
+2026-02-02 09:59:05,324 - INFO - Computed test embeddings
+2026-02-02 10:00:50,841 - INFO - Computing embedding for train
+2026-02-02 10:01:00,786 - INFO - Computed train embeddings
+2026-02-02 10:01:00,786 - INFO - Computing embedding for dev
+2026-02-02 10:01:01,890 - INFO - Computed dev embeddings
+2026-02-02 10:01:01,890 - INFO - Computing embedding for test
+2026-02-02 10:01:12,736 - INFO - Computed test embeddings
