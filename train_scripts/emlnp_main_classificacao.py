@@ -71,10 +71,15 @@ class DynamicFusionLayer(nn.Module):
         self.mode = mode
         
         if self.mode == 'weighted_sum':
-            # Começa com 1.0 -> Igual a uma soma pura
-            self.layer_weights = nn.Parameter(torch.ones(num_layers))
+            # --- O PULO DO GATO ---
+            # Inicializamos com 1/N (ex: 0.083). 
+            # Na época 0, isso se comporta EXATAMENTE como uma média.
+            # Mas o modelo tem liberdade total para crescer esses pesos.
+            initial_value = 1.0 / num_layers
+            self.layer_weights = nn.Parameter(torch.full((num_layers,), initial_value))
+            print(f"⚖️ Inicialização Weighted Sum: {initial_value:.4f} (Start suave)")
         else:
-            # Começa com 0.0 -> Softmax(0) vira pesos iguais (média pura)
+            # Modo média (Softmax) começa com zeros -> Softmax vira 1/N
             self.layer_weights = nn.Parameter(torch.zeros(num_layers))
 
     def forward(self, all_hidden_states):
@@ -97,56 +102,51 @@ class DynamicFusionLayer(nn.Module):
 class Conv1dFusionLayer(nn.Module):
     def __init__(self, num_layers):
         super().__init__()
-        # in_channels = 12 ou 24 (suas camadas)
-        # out_channels = 1 (fusão final)
-        # kernel_size = 1 (olha para cada ponto individualmente através das camadas)
+        
+        # 1. SEM BIAS: Garante compatibilidade total com seu JSON de avaliação
         self.conv1d = nn.Conv1d(
             in_channels=num_layers, 
             out_channels=1, 
             kernel_size=1, 
-            bias=True
+            bias=False 
         )
         
-        # Inicialização Xavier (estabilidade)
-        nn.init.xavier_uniform_(self.conv1d.weight)
-        nn.init.zeros_(self.conv1d.bias)
+        # 2. INICIALIZAÇÃO "SMART MEAN":
+        # Inicializa com um valor pequeno que, se somado, dá perto de 1.0.
+        # Isso garante que o treino comece estável como uma Média.
+        nn.init.constant_(self.conv1d.weight, 1.0 / num_layers)
 
     def forward(self, all_hidden_states):
-        # 1. Empilha: [Batch, Layers, Seq_Len, Hidden_Dim]
-        # Exemplo Base: [64, 12, 128, 768]
+        # [Batch, Layers, Seq, Dim]
         stacked_layers = torch.stack(all_hidden_states[1:], dim=1)
-        
-        # Pega as dimensões para desfazer a bagunça depois
         batch_size, num_layers, seq_len, hidden_dim = stacked_layers.size()
 
-        # 2. Achatar (Flatten) as duas últimas dimensões
-        # Conv1d quer: [Batch, Channels, Length]
-        # Transformamos em: [Batch, Layers, Seq_Len * Hidden_Dim]
-        # Ex: [64, 12, 98304]
+        # [Batch, Layers, Flattened]
         flattened_input = stacked_layers.view(batch_size, num_layers, -1)
 
-        # 3. Aplica a Convolução 1D
-        # Reduz os 12 canais para 1 canal
-        # Resultado: [Batch, 1, 98304]
-        fused_flattened = self.conv1d(flattened_input)
+        # 3. TRUQUE DE CONTROLE (GATING)
+        # Em vez de usar os pesos crus (que podem ir para 1000 ou -500),
+        # aplicamos Tanh nos pesos.
+        # Vantagem: Permite negativos (correção de ruído) mas limita entre -1 e 1.
+        raw_weights = self.conv1d.weight
+        gated_weights = torch.tanh(raw_weights) 
+        
+        # Aplicamos a convolução manualmente usando os pesos controlados
+        fused_flattened = F.conv1d(
+            flattened_input, 
+            gated_weights, 
+            bias=None, 
+            stride=1, 
+            padding=0
+        )
 
-        # 4. Desachatar (Reshape de volta)
-        # Volta para: [Batch, 1, Seq_Len, Hidden_Dim]
         fused_embedding = fused_flattened.view(batch_size, 1, seq_len, hidden_dim)
-
-        # 5. Remove a dimensão extra (Squeeze)
-        # Final: [Batch, Seq_Len, Hidden_Dim]
         fused_embedding = fused_embedding.squeeze(1)
 
-        # 6. Extração de Pesos para o Heatmap
-        # Shape original: [Out, In, Kernel] -> [1, 12, 1]
-        raw_weights = self.conv1d.weight.view(-1)
-        
-        # Softmax apenas para visualização (internamente ele usa o valor real bruto)
-        #norm_weights_for_plot = F.softmax(raw_weights, dim=0)
-        norm_weights_for_plot = raw_weights
+        # Retorna os pesos GATED para salvar no JSON
+        weights_for_plot = gated_weights.view(-1)
 
-        return fused_embedding, norm_weights_for_plot
+        return fused_embedding, weights_for_plot
 
 class TaskSpecificModel(nn.Module):
     def __init__(self, model_name, num_classes, pooling_type, type_fusion, mode_fusion): # Novo parâmetro
