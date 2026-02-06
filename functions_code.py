@@ -4,8 +4,288 @@ import numpy as np
 import pandas as pd
 import os
 from transformers import AutoTokenizer, AutoModel, DebertaV2Model, DebertaV2Tokenizer, BertTokenizer, BertModel, RobertaTokenizer, RobertaModel, AutoModelForMaskedLM
+import torch
+import os
+import json
+from nltk.corpus import stopwords
+import numpy as np
 
 main_colunas = ['model', 'pooling', 'type_pooling','agg', 'layer', 'epochs', 'out_vec_size', 'qtd_layers', 'nhid', 'params', 'best_layers']
+
+class SentenceEncoder:
+    def __init__(self, model_name, device, args):
+        self.device = device
+        self.size_embedding = None
+        self.pooling_strategy = None
+        self.print_best_layers = None
+        
+        self.stopwords_set_ids = None
+        self.cls_token_id = None
+        self.sep_token_id = None
+
+        self.general_embeddings = {}
+        self.list_poolings = None
+        self.list_layers = None
+        self.actual_layer = None
+        self.current_task_name = None
+
+        self.run_pooling = None
+        self.run_layer = None
+
+        # --- Inicializa o modelo escolhido ---
+        self.name_model, self.qtd_layers, self.tokenizer, self.model = load_model(model_name, device)
+        self._prepare_special_token_ids()
+
+        # --- FUSÃO (CAP 5) ---
+        self.dynamic_weights = {}
+        self.dynamic_weights_path = args.dynamic_weights_path
+        if self.dynamic_weights_path and os.path.exists(self.dynamic_weights_path):
+            print(f"Carregando Pesos de Fusão do Cap 5 de: {self.dynamic_weights_path}")
+            with open(self.dynamic_weights_path, 'r') as f:
+                self.dynamic_weights = json.load(f)
+        else:
+            if self.dynamic_weights_path:
+                print(f"AVISO: Arquivo de fusão {self.dynamic_weights_path} não encontrado.")
+       
+    def _prepare_special_token_ids(self):
+        stopwords_list = stopwords.words('english')
+        stopword_ids = self.tokenizer.convert_tokens_to_ids(stopwords_list)
+        stopword_ids_filtered = [id for id in stopword_ids if id != self.tokenizer.unk_token_id]
+        self.stopwords_set_ids = torch.tensor(stopword_ids_filtered, device=self.device)
+        self.cls_token_id = self.tokenizer.cls_token_id
+        self.sep_token_id = self.tokenizer.sep_token_id
+
+    def _encode(self, sentences, current_task, batch_size=2048): 
+        self.current_task_name = current_task
+        tokens = self.tokenizer(sentences, padding="longest", truncation=True, return_tensors="pt", max_length=self.model.config.max_position_embeddings)
+        tokens = {key: val.to(self.device, non_blocking=True) for key, val in tokens.items()}
+        all_embeddings = []
+
+        for i in range(0, len(sentences), batch_size):
+            batch_tokens = {key: val[i:i+batch_size] for key, val in tokens.items()}
+            use_amp = (self.device.type == "cuda")
+            with torch.inference_mode(), torch.amp.autocast(device_type="cuda", enabled=use_amp):
+                output = self.model(**batch_tokens, output_hidden_states=True, return_dict=True)
+                embeddings = self._apply_pooling(output, batch_tokens['attention_mask'], batch_tokens['input_ids'])
+            all_embeddings.append(embeddings)
+
+        self.size_embedding = all_embeddings[0].shape[-1]
+        final_embeddings = torch.cat(all_embeddings, dim=0).to('cpu').numpy()
+        del batch_tokens, output
+        torch.cuda.empty_cache() 
+        return final_embeddings
+
+    def _create_combined_mask(self, input_ids, attention_mask, exclude_stopwords=False, exclude_cls_sep=False):
+        combined_mask = attention_mask.clone()
+        if exclude_stopwords:
+            stopword_mask = torch.isin(input_ids, self.stopwords_set_ids, invert=True)
+            combined_mask = combined_mask * stopword_mask
+        if exclude_cls_sep:
+            special_tokens_mask = (input_ids != self.cls_token_id) & (input_ids != self.sep_token_id)
+            combined_mask = combined_mask * special_tokens_mask
+        return combined_mask
+    
+    def _mean_pooling_exclude_cls_sep_and_stopwords(self, output, attention_mask, input_ids):
+        mask = self._create_combined_mask(input_ids, attention_mask, exclude_stopwords=True, exclude_cls_sep=True)
+        expanded_mask = mask.unsqueeze(-1)
+        masked_embeddings = output * expanded_mask
+        sum_embeddings = masked_embeddings.sum(dim=1)
+        valid_token_counts = expanded_mask.sum(dim=1)
+        return sum_embeddings / valid_token_counts.clamp(min=1e-4)
+
+    def _sum_pooling_exclude_cls_sep_and_stopwords(self, output, attention_mask, input_ids):
+        mask = self._create_combined_mask(input_ids, attention_mask, exclude_stopwords=True, exclude_cls_sep=True)
+        expanded_mask = mask.unsqueeze(-1)
+        return (output * expanded_mask).sum(dim=1)
+    
+    def _max_pooling_exclude_cls_sep_and_stopwords(self, output, attention_mask, input_ids):
+        mask = self._create_combined_mask(input_ids, attention_mask, exclude_stopwords=True, exclude_cls_sep=True)
+        expanded_mask = mask.unsqueeze(-1)
+        masked_embeddings = output.masked_fill(expanded_mask == 0, -1e4)
+        return masked_embeddings.max(dim=1)[0]
+    
+    def _simple_pooling(self, hidden_state, attention_mask, name_pooling, input_ids):
+        match name_pooling:
+            case "CLS":
+                self.run_pooling = "CLS"
+                return hidden_state[:, 0, :]
+            case "AVG":
+                self.run_pooling = "AVG"
+                return ((hidden_state * attention_mask.unsqueeze(-1)).sum(1) / attention_mask.sum(-1).unsqueeze(-1).clamp(min=1e-4))
+            case "SUM":
+                self.run_pooling = "SUM"
+                return (hidden_state * attention_mask.unsqueeze(-1)).sum(dim=1)
+            case "MAX":
+                self.run_pooling = "MAX"
+                return torch.max(hidden_state.masked_fill(attention_mask.unsqueeze(-1) == 0, -1e4), dim=1)[0]
+            case "AVG-NS":
+                self.run_pooling = "AVG-NS"
+                return self._mean_pooling_exclude_cls_sep_and_stopwords(hidden_state, attention_mask, input_ids)
+            case "SUM-NS":
+                self.run_pooling = "SUM-NS"
+                return self._sum_pooling_exclude_cls_sep_and_stopwords(hidden_state, attention_mask, input_ids)
+            case "MAX-NS":
+                self.run_pooling = "MAX-NS"
+                return self._max_pooling_exclude_cls_sep_and_stopwords(hidden_state, attention_mask, input_ids)
+                         
+    def _get_pooling_result(self, hidden_state, attention_mask, name_pooling, name_agg, input_ids):
+        self.print_best_layers =  "NORMAL"        
+        name_pooling_split = name_pooling.split('+')
+
+        match len(name_pooling_split):
+            case 1:
+                return self._simple_pooling(hidden_state, attention_mask, name_pooling_split[0], input_ids)
+            case 2:
+                return torch.cat((
+                    self._simple_pooling(hidden_state, attention_mask, name_pooling_split[0], input_ids),
+                    self._simple_pooling(hidden_state, attention_mask, name_pooling_split[1], input_ids)
+                ), dim=1)
+            case 3:
+                return torch.cat((
+                    self._simple_pooling(hidden_state, attention_mask, name_pooling_split[0], input_ids),
+                    self._simple_pooling(hidden_state, attention_mask, name_pooling_split[1], input_ids),
+                    self._simple_pooling(hidden_state, attention_mask, name_pooling_split[2], input_ids)
+                ), dim=1)
+            case 4:
+                return torch.cat((
+                    self._simple_pooling(hidden_state, attention_mask, name_pooling_split[0], input_ids),
+                    self._simple_pooling(hidden_state, attention_mask, name_pooling_split[1], input_ids),
+                    self._simple_pooling(hidden_state, attention_mask, name_pooling_split[2], input_ids),
+                    self._simple_pooling(hidden_state, attention_mask, name_pooling_split[3], input_ids)
+                ), dim=1)
+
+    def _compute_mean_weights(self, task_list):
+        """Calcula a média dos pesos para uma lista de tarefas, ignorando as que não existem no JSON."""
+        valid_vectors = []
+        for task in task_list:
+            # Garante que temos pesos para essa task
+            if task in self.dynamic_weights:
+                valid_vectors.append(np.array(self.dynamic_weights[task]))
+        
+        if not valid_vectors:
+            return None
+            
+        # Calcula a média coluna por coluna (layer por layer)
+        mean_vector = np.mean(valid_vectors, axis=0)
+        return mean_vector.tolist()
+
+    def _apply_pooling(self, output, attention_mask, input_ids):  
+        hidden_states = output.hidden_states
+        name_pooling = self.pooling_strategy.split("_")[0] 
+        name_agg = self.pooling_strategy.split("_")[-1]    
+
+        senteval_tasks_cl = ['MR', 'CR', 'SUBJ', 'MPQA', 'SST2', 'TREC', 'MRPC']
+        senteval_nli = senteval_tasks_cl + ['NLI']
+
+        dynamic_weights_strategies = [
+            'IN-TASK', 'LOO-SENTEVAL', 'AVG-SENTEVAL', 
+            'NLI', 'LOO-SENTEVAL-NLI', 'AVG-ALL', 'STSB'
+        ]
+
+        if name_agg in dynamic_weights_strategies:
+            weights = None
+            
+            # 1. IN-TASK (Usa os pesos da própria tarefa atual) [Igual ao antigo DYNAMIC]
+            if name_agg == 'IN-TASK':
+                if self.current_task_name in self.dynamic_weights:
+                    weights = self.dynamic_weights[self.current_task_name]
+                    self.run_layer = "IN-TASK"
+
+            # 2. LEAVE-ONE-OUT-SENTEVAL (Média do SentEval - Task Atual)
+            elif name_agg == 'LOO-SENTEVAL':
+                target_tasks = [t for t in senteval_tasks_cl if t != self.current_task_name]
+                weights = self._compute_mean_weights(target_tasks)
+                self.run_layer = "LOO-SENTEVAL"
+
+            # 3. AVG-SENTEVAL (Média de todas do SentEval)
+            elif name_agg == 'AVG-SENTEVAL':
+                # Tenta pegar direto do JSON se existir, senão calcula
+                if 'AVG_SENTEVAL' in self.dynamic_weights:
+                    weights = self.dynamic_weights['AVG_SENTEVAL']
+                    self.run_layer = "AVG-SENTEVAL"
+                else:
+                    weights = self._compute_mean_weights(senteval_tasks_cl)
+                    self.run_layer = "AVG-SENTEVAL"
+
+            # 4. NLI (Usa pesos do NLI puro)
+            elif name_agg == 'NLI':
+                if 'NLI' in self.dynamic_weights:
+                    weights = self.dynamic_weights['NLI']
+                    self.run_layer = "NLI"
+
+            # 5. LEAVE-ONE-OUT-SENTEVAL-NLI (Média de SentEval + NLI - Task Atual)
+            elif name_agg == 'LOO-SENTEVAL-NLI':
+                target_tasks = [t for t in senteval_nli if t != self.current_task_name]
+                weights = self._compute_mean_weights(target_tasks)
+                self.run_layer = "LOO-SENTEVAL-NLI"
+
+            # 6. AVG-ALL (Média de tudo + NLI) [Igual ao antigo UNIVERSAL]
+            elif name_agg == 'AVG-ALL':
+                if 'AVG_ALL' in self.dynamic_weights:
+                    weights = self.dynamic_weights['AVG_ALL']
+                    self.run_layer = "AVG-ALL"
+                else:
+                    weights = self._compute_mean_weights(senteval_nli)
+                    self.run_layer = "AVG-ALL-CALCULADO"
+
+            # 7. STS: Usar os pesos do STSB, para tarefas de similaridade
+            elif name_agg == 'STSB':
+                # tenta chave universal
+                if 'STSBenchmark' in self.dynamic_weights:
+                    weights = self.dynamic_weights['STSBenchmark']
+                    self.run_layer = "STSB"
+                else:
+                    # média de todas as tasks de similaridade que existirem no JSON
+                    sts_tasks = ['STS12', 'STS13', 'STS14', 'STS15', 'STS16', 'STSBenchmark', 'SICKRelatedness']
+                    weights = self._compute_mean_weights(sts_tasks)
+                    self.run_layer = "STS-MEAN"
+
+            # --- FALLBACK DE SEGURANÇA ---
+            # Se não achou pesos (ex: task nova sem pesos no JSON), usa média uniforme
+            if weights is None:
+                # Tenta fallback para AVG_ALL se não for uma estratégia Leave-Out específica
+                if 'AVG_ALL' in self.dynamic_weights:
+                    weights = self.dynamic_weights['AVG_ALL']
+                    self.run_layer = "AVG-ALL-ELSE"
+                else:
+                    weights = [1.0/len(hidden_states[-12:])] * len(hidden_states[-12:])
+                    self.run_layer = "AVG-ALL-UNIFORME"
+
+            encoder_layers = hidden_states[1:]
+            L = len(encoder_layers)
+
+            if weights is None:
+                print("sem pesos")
+            else:
+                if len(weights) != L:
+                    raise ValueError(
+                        f"[Layer mismatch] task={self.current_task_name} agg={name_agg} "
+                        f"len(weights)={len(weights)} len(layers)={L}"
+                    )
+
+            layers_to_fuse = torch.stack(encoder_layers, dim=0)
+            weights_tensor = torch.tensor(weights, device=layers_to_fuse.device, dtype=layers_to_fuse.dtype)
+            weights_tensor = weights_tensor.view(-1, 1, 1, 1)
+            fused_layer = (layers_to_fuse * weights_tensor).sum(dim=0)
+            
+            return self._get_pooling_result(fused_layer, attention_mask, name_pooling, name_agg, input_ids)
+
+        if name_agg.startswith("LYR"):
+            layer_idx = int(name_agg.split('-')[-1])   
+            LYR_hidden =  hidden_states[layer_idx]            
+            return self._get_pooling_result(LYR_hidden, attention_mask, name_pooling, "LYR", input_ids)        
+        else:        
+            name_agg_type = name_agg.split("-")[0]
+            if "-" in name_agg:
+                agg_initial_layer = int(name_agg.split("-")[1])
+                agg_final_layer = int(name_agg.split("-")[2])
+                
+                match name_agg_type:  
+                    case "SUM":
+                        return self._get_pooling_result(torch.stack(hidden_states[agg_initial_layer:agg_final_layer+1], dim=0).sum(dim=0), attention_mask, name_pooling, name_agg, input_ids)
+                    case "AVG":
+                        return self._get_pooling_result(torch.stack(hidden_states[agg_initial_layer:agg_final_layer+1], dim=0).mean(dim=0), attention_mask, name_pooling, name_agg, input_ids)
+            return None
 
 def load_model(model_name, device):
 
@@ -286,8 +566,8 @@ def tables_process(data, columns_tasks, type_task, path_cl, filename_task):
     devacc_table[['agg', 'layer']] = devacc_table['pooling'].str.split('_', expand=True)
     acc_table[['agg', 'layer']] = acc_table['pooling'].str.split('_', expand=True)
 
-    devacc_table['params'] = "-".join(filename_task.split('_')[5:11])
-    acc_table['params'] = "-".join(filename_task.split('_')[5:11])
+    devacc_table['params'] = "None"
+    acc_table['params'] = "None"
 
     devacc_table['type_pooling'] = devacc_table['agg'].apply(get_type_pooling)
     acc_table['type_pooling'] = acc_table['agg'].apply(get_type_pooling)

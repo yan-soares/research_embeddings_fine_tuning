@@ -11,3 +11,8 @@ python cap3_main_classificacao.py --model_name FacebookAI/roberta-base --pooling
 (todos) python main_experiments.py --task_type classification --models deberta-base --poolings CLS,AVG,AVG-NS,CLS+AVG,AVG+AVG-NS,CLS+AVG-NS,CLS+AVG+AVG-NS --agg_layers AVG-ALL,AVG-SENTEVAL,IN-TASK,LEAVE-ONE-OUT-SENTEVAL,LEAVE-ONE-OUT-SENTEVAL-NLI,NLI --save_dir final_results_deberta_cl_avg --dynamic_weights_path train_scripts/final_results_cap3/results_microsoft_deberta-v3-base/avg/dynamic_weights_mean.json
 
 (teste) python main_experiments.py --task_type classification --models deberta-base --poolings CLS,AVG,AVG-NS,CLS+AVG,AVG+AVG-NS,CLS+AVG-NS,CLS+AVG+AVG-NS --agg_layers AVG-ALL,LEAVE-ONE-OUT-SENTEVAL-NLI --save_dir final_results_deberta_cl_avg_teste --dynamic_weights_path train_scripts/final_results_cap3/results_microsoft_deberta-v3-base/avg/dynamic_weights_mean.json
+
+
+
+#RODANDO
+python main_experiments.py --task_type classification --models deberta-base --poolings all --agg_layers IN-TASK,LEAVE-ONE-OUT-SENTEVAL,AVG-SENTEVAL,NLI,LEAVE-ONE-OUT-SENTEVAL-NLI,AVG-ALL --dynamic_weights_path train_scripts/emnlp_classification_weights
