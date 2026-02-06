@@ -444,8 +444,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Treinamento Task-Specific com Fusão de Camadas')
     parser.add_argument('--model_name', type=str, default='microsoft/deberta-v3-base', help='Nome do modelo no HuggingFace')
     parser.add_argument('--pooling_type', type=str, default='avg', choices=['avg', 'cls', 'cls_avg'], help='Estratégia de pooling')
-    parser.add_argument('--type_fusion', type=str, default='dynamic_layer', choices=['dynamic_layer', 'cnn_1d'], help='Estratégia de agregacao de camadas')
-    parser.add_argument('--mode_fusion', type=str, default='default', choices=['weighted_mean', 'weighted_sum'], help='Modo de agregacao de camadas')
+    parser.add_argument('--type_fusion', type=str, default='dynamic_layer', choices=['dynamic_layer', 'cnn_1d', 'attention'], help='Estratégia de agregacao de camadas')
+    parser.add_argument('--mode_fusion', type=str, default='default', choices=['default', 'weighted_mean', 'weighted_sum'], help='Modo de agregacao de camadas')
     parser.add_argument('--base_path', type=str, default='final_results_cap3_classificacao', help='Base Path')
    
     args = parser.parse_args()

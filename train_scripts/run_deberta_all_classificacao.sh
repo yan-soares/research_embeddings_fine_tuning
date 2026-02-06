@@ -1,9 +1,9 @@
 python emlnp_main_classificacao.py --model_name microsoft/deberta-v3-base --pooling_type avg --type_fusion dynamic_layer --mode_fusion weighted_mean --base_path emnlp_classification_weights &&
 python emlnp_main_classificacao.py --model_name microsoft/deberta-v3-base --pooling_type cls --type_fusion dynamic_layer --mode_fusion weighted_mean --base_path emnlp_classification_weights &&
-python emlnp_main_classificacao.py --model_name microsoft/deberta-v3-base --pooling_type cls+avg --type_fusion dynamic_layer --mode_fusion weighted_mean --base_path emnlp_classification_weights &&
+python emlnp_main_classificacao.py --model_name microsoft/deberta-v3-base --pooling_type cls_avg --type_fusion dynamic_layer --mode_fusion weighted_mean --base_path emnlp_classification_weights &&
 python emlnp_main_classificacao.py --model_name microsoft/deberta-v3-base --pooling_type avg --type_fusion dynamic_layer --mode_fusion weighted_sum --base_path emnlp_classification_weights &&
 python emlnp_main_classificacao.py --model_name microsoft/deberta-v3-base --pooling_type cls --type_fusion dynamic_layer --mode_fusion weighted_sum --base_path emnlp_classification_weights &&
-python emlnp_main_classificacao.py --model_name microsoft/deberta-v3-base --pooling_type cls+avg --type_fusion dynamic_layer --mode_fusion weighted_sum --base_path emnlp_classification_weights &&
+python emlnp_main_classificacao.py --model_name microsoft/deberta-v3-base --pooling_type cls_avg --type_fusion dynamic_layer --mode_fusion weighted_sum --base_path emnlp_classification_weights &&
 python emlnp_main_classificacao.py --model_name microsoft/deberta-v3-base --pooling_type avg --type_fusion cnn_1d --mode_fusion default --base_path emnlp_classification_weights &&
 python emlnp_main_classificacao.py --model_name microsoft/deberta-v3-base --pooling_type cls --type_fusion cnn_1d --mode_fusion default --base_path emnlp_classification_weights &&
-python emlnp_main_classificacao.py --model_name microsoft/deberta-v3-base --pooling_type cls+avg --type_fusion cnn_1d --mode_fusion default --base_path emnlp_classification_weights
+python emlnp_main_classificacao.py --model_name microsoft/deberta-v3-base --pooling_type cls_avg --type_fusion cnn_1d --mode_fusion default --base_path emnlp_classification_weights
