@@ -379,8 +379,8 @@ def get_pooling_techniques(poolings_args):
 
     simple_poolings = ['CLS', 'AVG', 'SUM', 'MAX'] 
     simple_ns_poolings = ['AVG-NS', 'SUM-NS', 'MAX-NS'] 
-    simple_poolings_without_max = ['CLS', 'AVG', 'SUM'] 
-    simple_ns_poolings_without_max = ['AVG-NS', 'SUM-NS'] 
+    simple_poolings_without_max = ['CLS', 'AVG'] 
+    simple_ns_poolings_without_max = ['AVG-NS']
     
     all_poolings_individuals = simple_poolings + simple_ns_poolings ## 7
     two_tokens_poolings = [f"{a}+{b}" for a, b in combinations(all_poolings_individuals, 2)] ## 21
@@ -396,7 +396,7 @@ def get_pooling_techniques(poolings_args):
         pooling_prefixs = all_poolings_individuals + two_tokens_poolings + three_tokens_poolings
         return pooling_prefixs    
     
-    if poolings_args[0] == 'all_without_max':
+    if poolings_args[0] == 'all_without_max_sum':
         pooling_prefixs = all_poolings_individuals_without_max + two_tokens_poolings_without_max + three_tokens_poolings_without_max
         return pooling_prefixs    
         
