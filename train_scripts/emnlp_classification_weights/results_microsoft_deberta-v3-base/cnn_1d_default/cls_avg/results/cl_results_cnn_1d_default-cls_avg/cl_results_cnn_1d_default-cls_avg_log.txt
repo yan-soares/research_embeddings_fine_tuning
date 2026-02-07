@@ -1,0 +1,91 @@
+2026-02-06 17:31:12,800 - INFO - Generating sentence embeddings
+2026-02-06 17:31:27,725 - INFO - Generated sentence embeddings
+2026-02-06 17:31:27,726 - INFO - Training sklearn-LogReg with (inner) 10-fold cross-validation
+2026-02-06 17:31:50,325 - INFO - Best param found at split 1: l2reg = 8                 with score 84.5
+2026-02-06 17:32:10,155 - INFO - Best param found at split 2: l2reg = 8                 with score 85.02
+2026-02-06 17:32:26,889 - INFO - Best param found at split 3: l2reg = 8                 with score 84.8
+2026-02-06 17:32:42,771 - INFO - Best param found at split 4: l2reg = 8                 with score 84.89
+2026-02-06 17:32:58,391 - INFO - Best param found at split 5: l2reg = 8                 with score 84.78
+2026-02-06 17:33:17,512 - INFO - Best param found at split 6: l2reg = 8                 with score 84.84
+2026-02-06 17:33:39,193 - INFO - Best param found at split 7: l2reg = 4                 with score 84.6
+2026-02-06 17:34:04,419 - INFO - Best param found at split 8: l2reg = 8                 with score 84.71
+2026-02-06 17:34:46,823 - INFO - Best param found at split 9: l2reg = 8                 with score 84.67
+2026-02-06 17:35:27,128 - INFO - Best param found at split 10: l2reg = 8                 with score 84.61
+2026-02-06 17:35:28,085 - INFO - Generating sentence embeddings
+2026-02-06 17:35:32,760 - INFO - Generated sentence embeddings
+2026-02-06 17:35:32,760 - INFO - Training sklearn-LogReg with (inner) 10-fold cross-validation
+2026-02-06 17:35:48,474 - INFO - Best param found at split 1: l2reg = 8                 with score 87.11
+2026-02-06 17:36:04,462 - INFO - Best param found at split 2: l2reg = 8                 with score 86.46
+2026-02-06 17:36:21,167 - INFO - Best param found at split 3: l2reg = 8                 with score 87.22
+2026-02-06 17:36:38,008 - INFO - Best param found at split 4: l2reg = 8                 with score 87.17
+2026-02-06 17:36:53,940 - INFO - Best param found at split 5: l2reg = 8                 with score 86.99
+2026-02-06 17:37:11,140 - INFO - Best param found at split 6: l2reg = 8                 with score 86.93
+2026-02-06 17:37:26,825 - INFO - Best param found at split 7: l2reg = 8                 with score 87.23
+2026-02-06 17:37:43,093 - INFO - Best param found at split 8: l2reg = 8                 with score 87.43
+2026-02-06 17:37:58,973 - INFO - Best param found at split 9: l2reg = 8                 with score 86.99
+2026-02-06 17:38:14,343 - INFO - Best param found at split 10: l2reg = 8                 with score 87.38
+2026-02-06 17:38:14,769 - INFO - Generating sentence embeddings
+2026-02-06 17:38:29,377 - INFO - Generated sentence embeddings
+2026-02-06 17:38:29,378 - INFO - Training sklearn-LogReg with (inner) 10-fold cross-validation
+2026-02-06 17:39:01,253 - INFO - Best param found at split 1: l2reg = 8                 with score 93.89
+2026-02-06 17:39:36,360 - INFO - Best param found at split 2: l2reg = 8                 with score 94.21
+2026-02-06 17:40:11,304 - INFO - Best param found at split 3: l2reg = 8                 with score 93.77
+2026-02-06 17:40:42,707 - INFO - Best param found at split 4: l2reg = 8                 with score 94.26
+2026-02-06 17:41:18,167 - INFO - Best param found at split 5: l2reg = 8                 with score 93.86
+2026-02-06 17:41:50,600 - INFO - Best param found at split 6: l2reg = 8                 with score 93.99
+2026-02-06 17:42:23,336 - INFO - Best param found at split 7: l2reg = 8                 with score 93.99
+2026-02-06 17:42:51,423 - INFO - Best param found at split 8: l2reg = 8                 with score 94.4
+2026-02-06 17:43:18,501 - INFO - Best param found at split 9: l2reg = 8                 with score 94.01
+2026-02-06 17:43:46,988 - INFO - Best param found at split 10: l2reg = 8                 with score 94.22
+2026-02-06 17:43:47,754 - INFO - Generating sentence embeddings
+2026-02-06 17:43:58,334 - INFO - Generated sentence embeddings
+2026-02-06 17:43:58,336 - INFO - Training sklearn-LogReg with (inner) 10-fold cross-validation
+2026-02-06 17:44:38,416 - INFO - Best param found at split 1: l2reg = 8                 with score 86.29
+2026-02-06 17:45:19,035 - INFO - Best param found at split 2: l2reg = 8                 with score 86.22
+2026-02-06 17:45:57,818 - INFO - Best param found at split 3: l2reg = 8                 with score 85.9
+2026-02-06 17:46:40,709 - INFO - Best param found at split 4: l2reg = 8                 with score 85.9
+2026-02-06 17:47:22,237 - INFO - Best param found at split 5: l2reg = 8                 with score 85.74
+2026-02-06 17:48:02,552 - INFO - Best param found at split 6: l2reg = 8                 with score 85.95
+2026-02-06 17:48:38,931 - INFO - Best param found at split 7: l2reg = 8                 with score 85.89
+2026-02-06 17:49:15,623 - INFO - Best param found at split 8: l2reg = 8                 with score 86.09
+2026-02-06 17:49:48,884 - INFO - Best param found at split 9: l2reg = 8                 with score 85.99
+2026-02-06 17:50:29,250 - INFO - Best param found at split 10: l2reg = 8                 with score 86.04
+2026-02-06 17:50:30,417 - INFO - Computing embedding for train
+2026-02-06 17:51:44,511 - INFO - Computed train embeddings
+2026-02-06 17:51:44,511 - INFO - Computing embedding for dev
+2026-02-06 17:51:45,748 - INFO - Computed dev embeddings
+2026-02-06 17:51:45,748 - INFO - Computing embedding for test
+2026-02-06 17:51:48,045 - INFO - Computed test embeddings
+2026-02-06 17:51:48,045 - INFO - Training sklearn-LogReg with standard validation..
+2026-02-06 17:52:17,174 - INFO - [('reg:0.25', 84.17), ('reg:0.5', 84.98), ('reg:1', 85.67), ('reg:2', 87.84), ('reg:4', 85.55), ('reg:8', 84.52)]
+2026-02-06 17:52:17,174 - INFO - Validation : best param found is reg = 2 with score             87.84
+2026-02-06 17:52:17,174 - INFO - Evaluating...
+2026-02-06 17:52:22,341 - INFO - ***** Transfer task : TREC *****
+
+
+2026-02-06 17:52:27,658 - INFO - Computed train embeddings
+2026-02-06 17:52:28,201 - INFO - Computed test embeddings
+2026-02-06 17:52:28,201 - INFO - Training sklearn-LogReg with 10-fold cross-validation
+2026-02-06 17:53:22,853 - INFO - [('reg:0.5', np.float64(57.21)), ('reg:1', np.float64(59.06)), ('reg:2', np.float64(60.57)), ('reg:4', np.float64(60.69)), ('reg:8', np.float64(60.95)), ('reg:16', np.float64(61.56)), ('reg:32', np.float64(61.54))]
+2026-02-06 17:53:22,853 - INFO - Cross-validation : best param found is reg = 16             with score 61.56
+2026-02-06 17:53:22,853 - INFO - Evaluating...
+2026-02-06 17:53:23,848 - INFO - ***** Transfer task : MRPC *****
+
+
+2026-02-06 17:53:24,158 - INFO - Computing embedding for train
+2026-02-06 17:53:35,281 - INFO - Computed train embeddings
+2026-02-06 17:53:35,281 - INFO - Computing embedding for test
+2026-02-06 17:53:40,299 - INFO - Computed test embeddings
+2026-02-06 17:53:40,334 - INFO - Training sklearn-LogReg with 10-fold cross-validation
+2026-02-06 17:54:26,388 - INFO - [('reg:0.5', np.float64(68.47)), ('reg:1', np.float64(68.84)), ('reg:2', np.float64(69.7)), ('reg:4', np.float64(70.73)), ('reg:8', np.float64(71.61)), ('reg:16', np.float64(71.93)), ('reg:32', np.float64(71.84))]
+2026-02-06 17:54:26,388 - INFO - Cross-validation : best param found is reg = 16             with score 71.93
+2026-02-06 17:54:26,388 - INFO - Evaluating...
+2026-02-06 17:54:27,415 - INFO - Generating sentence embeddings
+2026-02-06 17:54:39,635 - INFO - Generated sentence embeddings
+2026-02-06 17:54:39,636 - INFO - Training sklearn-LogReg with (inner) 10-fold cross-validation
+2026-02-06 17:55:22,667 - INFO - Best param found at split 1: l2reg = 0.25                 with score 87.5
+2026-02-06 17:55:55,338 - INFO - Best param found at split 2: l2reg = 0.25                 with score 87.3
+2026-02-06 17:56:48,057 - INFO - Best param found at split 3: l2reg = 0.25                 with score 87.58
+2026-02-06 17:57:41,675 - INFO - Best param found at split 4: l2reg = 0.25                 with score 87.78
+2026-02-06 17:58:33,548 - INFO - Best param found at split 5: l2reg = 0.25                 with score 87.46
+2026-02-06 17:59:24,033 - INFO - Best param found at split 6: l2reg = 0.25                 with score 87.27

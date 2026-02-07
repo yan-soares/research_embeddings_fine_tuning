@@ -1,0 +1,27 @@
+{
+    "task_type": "classification",
+    "models": [
+        "deberta-base"
+    ],
+    "epochs": 4,
+    "batch": 64,
+    "kfold": 10,
+    "optim": "adam",
+    "nhid": 0,
+    "initial_layer": 12,
+    "final_layer": 12,
+    "poolings": [
+        "all_without_max_sum"
+    ],
+    "agg_layers": [
+        "IN-TASK",
+        "LEAVE-ONE-OUT-SENTEVAL",
+        "AVG-SENTEVAL",
+        "NLI",
+        "LEAVE-ONE-OUT-SENTEVAL-NLI",
+        "AVG-ALL"
+    ],
+    "tasks": null,
+    "save_dir": null,
+    "dynamic_weights_path": "train_scripts/emnlp_classification_weights/results_microsoft_deberta-v3-base/dynamic_layer_weighted_sum/avg/dynamic_weights_mean.json"
+}
